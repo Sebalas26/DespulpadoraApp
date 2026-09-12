@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../blocs/auth_cubit.dart';
@@ -144,7 +143,7 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                     color: AppColors.waze.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(FontAwesomeIcons.waze, color: AppColors.waze, size: 24),
+                  child: const Icon(Icons.navigation, color: AppColors.waze, size: 24),
                 ),
                 title: const Text('Waze', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: const Text('Rutas con tráfico en tiempo real y alertas'),
@@ -485,7 +484,7 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                                       backgroundColor: AppColors.whatsapp,
                                       foregroundColor: Colors.white,
                                     ),
-                                    icon: const Icon(FontAwesomeIcons.whatsapp, size: 16),
+                                    icon: const Icon(Icons.chat, size: 16),
                                     label: const Text('WhatsApp'),
                                     onPressed: () => _openWhatsApp(
                                       _currentOrder.clienteTelefono,
@@ -559,7 +558,7 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                                   borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: const Icon(
-                                  FontAwesomeIcons.lemon,
+                                  Icons.local_florist_outlined,
                                   size: 14,
                                   color: AppColors.primary,
                                 ),

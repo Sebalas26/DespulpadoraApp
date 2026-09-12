@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:intl/intl.dart';
 import '../blocs/auth_cubit.dart';
 import '../blocs/orders_cubit.dart';
@@ -62,7 +61,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Icon(
-                FontAwesomeIcons.motorcycle,
+                Icons.two_wheeler,
                 color: AppColors.primary,
                 size: 16,
               ),
@@ -508,7 +507,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                 shape: BoxShape.circle,
               ),
               child: const Icon(
-                FontAwesomeIcons.boxOpen,
+                Icons.inventory_2_outlined,
                 size: 40,
                 color: AppColors.textMuted,
               ),

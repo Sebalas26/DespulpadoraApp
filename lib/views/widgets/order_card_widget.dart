@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
@@ -74,7 +73,7 @@ class OrderCardWidget extends StatelessWidget {
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: const Icon(
-                            FontAwesomeIcons.boxOpen,
+                            Icons.inventory_2_outlined,
                             size: 14,
                             color: AppColors.primary,
                           ),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import '../blocs/auth_cubit.dart';
 import '../config/api_config.dart';
 import '../config/routes.dart';
@@ -153,7 +152,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ],
                           ),
                           child: const Icon(
-                            FontAwesomeIcons.motorcycle,
+                            Icons.two_wheeler,
                             color: Colors.black,
                             size: 38,
                           ),
