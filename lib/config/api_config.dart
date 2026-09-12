@@ -1,21 +1,22 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Configuración central de endpoints de API REST y WebSockets para PulpasPro Domicilios
+/// Configuración central de endpoints de API REST para PulpasPro Domicilios (ApiDespulpadora)
 class ApiConfig {
-  // URLs por defecto (desarrollo local / emulador / red local)
-  // Para emulador Android usar 10.0.2.2 o IP LAN (ej. 192.168.1.50)
-  static const String defaultBaseUrl = 'http://localhost:3000/api';
-  static const String defaultWsUrl = 'ws://localhost:3000/ws';
+  // URLs por defecto (ASP.NET Core Web API en puerto 5000)
+  // Para emulador Android usar http://10.0.2.2:5000/api o IP LAN de la máquina de desarrollo
+  static const String defaultBaseUrl = 'http://localhost:5000/api';
+  static const String defaultWsUrl = 'ws://localhost:5000/ws';
 
   // OpenStreetMap Tile Server (Completamente gratuito)
   static const String osmTileUrl = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
   static const String userAgentPackageName = 'com.pulpaspro.despulpadora_app';
 
-  // Rutas REST
-  static const String loginEndpoint = '/auth/courier-login';
-  static const String ordersEndpoint = '/courier/orders';
+  // Rutas REST conectadas a ApiDespulpadora
+  static const String loginEndpoint = '/auth/login-mobile';
+  static const String ordersEndpoint = '/orders';
   static const String updateStatusEndpoint = '/orders'; // /orders/{id}/status
   static const String noveltyEndpoint = '/orders';     // /orders/{id}/novelty
+  static const String couriersEndpoint = '/couriers';   // /couriers/{id}/location
 
   // Intervalo de telemetría GPS (segundos)
   static const int telemetryIntervalSeconds = 5;

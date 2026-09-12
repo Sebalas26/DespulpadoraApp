@@ -29,10 +29,10 @@ class OrderItem {
 
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     return OrderItem(
-      nombre: json['nombre'] ?? json['productName'] ?? '',
-      presentacion: json['presentacion'] ?? json['presentation'] ?? '140g',
-      cantidad: (json['cantidad'] ?? json['quantity'] ?? 1) as int,
-      precioUnitario: (json['precioUnitario'] ?? json['unitPrice'] ?? 0).toDouble(),
+      nombre: json['fruitName'] ?? json['nombre'] ?? json['productName'] ?? 'Pulpa',
+      presentacion: json['sizeLabel'] ?? json['presentacion'] ?? json['presentation'] ?? '140g',
+      cantidad: (json['quantity'] ?? json['cantidad'] ?? 1) as int,
+      precioUnitario: (json['unitPrice'] ?? json['precioUnitario'] ?? 0).toDouble(),
     );
   }
 
@@ -107,6 +107,8 @@ class OrderModel {
       case 'asignado':
       case 'assigned':
       case 'nuevo':
+      case 'alistamiento':
+      case 'empacado':
       default:
         return OrderStatus.asignado;
     }
@@ -174,25 +176,26 @@ class OrderModel {
         .toList();
 
     return OrderModel(
-      id: json['id'] ?? json['orderId'] ?? '',
-      clienteNombre: json['clienteNombre'] ?? json['customerName'] ?? 'Cliente PulpasPro',
-      clienteTelefono: json['clienteTelefono'] ?? json['customerPhone'] ?? '',
-      direccion: json['direccion'] ?? json['deliveryAddress'] ?? '',
-      barrio: json['barrio'] ?? json['neighborhood'] ?? '',
-      ciudad: json['ciudad'] ?? json['city'] ?? 'Bogotá',
-      latitud: (json['latitud'] ?? json['latitude'] ?? 4.60971).toDouble(),
-      longitud: (json['longitud'] ?? json['longitude'] ?? -74.08175).toDouble(),
-      montoTotal: (json['montoTotal'] ?? json['totalAmount'] ?? 0).toDouble(),
-      metodoPago: json['metodoPago'] ?? json['paymentMethod'] ?? 'Efectivo Contraentrega',
-      requiereCobro: json['requiereCobro'] ?? json['requiresCollection'] ?? true,
-      estado: _parseStatus(json['estado'] ?? json['status']),
+      id: json['orderCode'] ?? json['id']?.toString() ?? json['orderId'] ?? '',
+      clienteNombre: json['clientName'] ?? json['clienteNombre'] ?? json['customerName'] ?? 'Cliente PulpasPro',
+      clienteTelefono: json['clientPhone'] ?? json['clienteTelefono'] ?? json['customerPhone'] ?? '',
+      direccion: json['clientAddress'] ?? json['direccion'] ?? json['deliveryAddress'] ?? '',
+      barrio: json['clientZone'] ?? json['barrio'] ?? json['neighborhood'] ?? '',
+      ciudad: json['city'] ?? json['ciudad'] ?? 'Bogotá',
+      latitud: (json['latitude'] ?? json['latitud'] ?? 4.60971).toDouble(),
+      longitud: (json['longitude'] ?? json['longitud'] ?? -74.08175).toDouble(),
+      montoTotal: (json['total'] ?? json['montoTotal'] ?? json['totalAmount'] ?? 0).toDouble(),
+      metodoPago: json['paymentMethod'] ?? json['metodoPago'] ?? 'Efectivo Contraentrega',
+      requiereCobro: json['requiresCashCollection'] ?? json['requiereCobro'] ?? json['requiresCollection'] ?? true,
+      estado: _parseStatus(json['status'] ?? json['estado']),
       items: itemsList,
-      notasEntrega: json['notasEntrega'] ?? json['notes'],
+      notasEntrega: json['notes'] ?? json['notasEntrega'],
       observacionesNovedad: json['observacionesNovedad'] ?? json['noveltyReason'],
-      fecha: json['fecha'] != null ? DateTime.tryParse(json['fecha']) : null,
+      fecha: json['orderDate'] != null ? DateTime.tryParse(json['orderDate']) : (json['fecha'] != null ? DateTime.tryParse(json['fecha']) : null),
       prioridad: json['prioridad'] ?? 2,
     );
   }
+
 
   Map<String, dynamic> toJson() {
     return {
