@@ -346,15 +346,16 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                       top: 12,
                       left: 16,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
                         decoration: BoxDecoration(
-                          color: AppColors.surface.withValues(alpha: 0.92),
+                          color: AppColors.surface.withValues(alpha: 0.96),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.border),
+                          border: Border.all(color: AppColors.borderHighlight),
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.3),
-                              blurRadius: 8,
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
                             ),
                           ],
                         ),
@@ -397,9 +398,11 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                             decoration: BoxDecoration(
-                              color: _currentOrder.estadoColor.withValues(alpha: 0.15),
+                              color: _currentOrder.estadoColor.withValues(alpha: 0.12),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: _currentOrder.estadoColor),
+                              border: Border.all(
+                                color: _currentOrder.estadoColor.withValues(alpha: 0.4),
+                              ),
                             ),
                             child: Text(
                               _currentOrder.estadoLabel,
@@ -413,7 +416,7 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                           Text(
                             _currentOrder.montoFormatted,
                             style: const TextStyle(
-                              color: AppColors.primaryLight,
+                              color: AppColors.primary,
                               fontWeight: FontWeight.w800,
                               fontSize: 18,
                             ),
@@ -425,11 +428,18 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
 
                       // Card de Contacto del Cliente
                       Container(
-                        padding: const EdgeInsets.all(14),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: AppColors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -504,9 +514,9 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                         Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AppColors.warning.withValues(alpha: 0.3)),
+                            color: const Color(0xFFFEF3C7),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: const Color(0xFFFDE68A)),
                           ),
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -517,7 +527,8 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                                 child: Text(
                                   _currentOrder.notasEntrega!,
                                   style: const TextStyle(
-                                    color: AppColors.textPrimary,
+                                    color: Color(0xFF92400E),
+                                    fontWeight: FontWeight.w500,
                                     fontSize: 12.5,
                                   ),
                                 ),
@@ -543,8 +554,15 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                       Container(
                         decoration: BoxDecoration(
                           color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(20),
                           border: Border.all(color: AppColors.border),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.03),
+                              blurRadius: 10,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Column(
                           children: _currentOrder.items.map((item) {
@@ -552,14 +570,14 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                               dense: true,
                               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                               leading: Container(
-                                padding: const EdgeInsets.all(6),
+                                padding: const EdgeInsets.all(7),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surfaceElevated,
-                                  borderRadius: BorderRadius.circular(8),
+                                  color: AppColors.primarySoft,
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: const Icon(
                                   Icons.local_florist_outlined,
-                                  size: 14,
+                                  size: 15,
                                   color: AppColors.primary,
                                 ),
                               ),
@@ -573,7 +591,11 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                               ),
                               trailing: Text(
                                 '\$${item.subtotal.toInt()} COP',
-                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                  color: AppColors.textPrimary,
+                                ),
                               ),
                             );
                           }).toList(),
@@ -612,7 +634,7 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,
-              foregroundColor: Colors.black,
+              foregroundColor: Colors.white,
               minimumSize: const Size.fromHeight(50),
             ),
             icon: const Icon(Icons.play_arrow_rounded, size: 22),
@@ -657,7 +679,7 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
                 child: ElevatedButton.icon(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.black,
+                    foregroundColor: Colors.white,
                     minimumSize: const Size.fromHeight(50),
                   ),
                   icon: const Icon(Icons.check_circle_rounded, size: 20),
@@ -675,9 +697,9 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.primary.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.primary),
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.primaryBorder),
             ),
             child: const Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -703,9 +725,9 @@ class _OrderDetailMapScreenState extends State<OrderDetailMapScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: AppColors.error.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.error),
+              color: const Color(0xFFFEE2E2),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFFFECACA)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,

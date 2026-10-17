@@ -55,14 +55,21 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
         title: Row(
           children: [
             Container(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(8),
+                color: AppColors.primary,
+                borderRadius: BorderRadius.circular(10),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.25),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
               ),
               child: const Icon(
                 Icons.two_wheeler,
-                color: AppColors.primary,
+                color: Colors.white,
                 size: 16,
               ),
             ),
@@ -96,14 +103,14 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
               final isConnected = trackState.wsStatus == WsConnectionStatus.connected;
               return Container(
                 margin: const EdgeInsets.only(right: 6),
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: isConnected
-                      ? AppColors.primary.withValues(alpha: 0.15)
+                      ? AppColors.primarySoft
                       : AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: isConnected ? AppColors.primary : AppColors.border,
+                    color: isConnected ? AppColors.primaryBorder : AppColors.borderHighlight,
                     width: 1,
                   ),
                 ),
@@ -123,8 +130,8 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                       isConnected ? 'GPS En Vivo' : 'Sin Conexión',
                       style: TextStyle(
                         fontSize: 11,
-                        color: isConnected ? AppColors.primary : AppColors.textMuted,
-                        fontWeight: FontWeight.w600,
+                        color: isConnected ? AppColors.primary : AppColors.textSecondary,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ],
@@ -246,11 +253,20 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: isOnShift ? AppColors.primaryBorder : AppColors.border,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
         gradient: LinearGradient(
           colors: [
             AppColors.surface,
-            isOnShift ? AppColors.surfaceElevated : AppColors.surface,
+            isOnShift ? AppColors.primarySoft.withValues(alpha: 0.65) : AppColors.surface,
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -276,9 +292,9 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                           boxShadow: isOnShift
                               ? [
                                   BoxShadow(
-                                    color: AppColors.primary.withValues(alpha: 0.6),
-                                    blurRadius: 8,
-                                    spreadRadius: 2,
+                                    color: AppColors.primary.withValues(alpha: 0.35),
+                                    blurRadius: 6,
+                                    spreadRadius: 1,
                                   )
                                 ]
                               : null,
@@ -288,7 +304,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                       Text(
                         isOnShift ? 'DISPONIBLE / EN TURNO' : 'DESCONECTADO',
                         style: TextStyle(
-                          color: isOnShift ? AppColors.primaryLight : AppColors.textMuted,
+                          color: isOnShift ? AppColors.primary : AppColors.textSecondary,
                           fontWeight: FontWeight.w800,
                           fontSize: 13,
                           letterSpacing: 0.5,
@@ -309,9 +325,9 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                 scale: 0.9,
                 child: Switch(
                   value: isOnShift,
-                  activeThumbColor: AppColors.primary,
-                  activeTrackColor: AppColors.primaryDark.withValues(alpha: 0.4),
-                  inactiveThumbColor: AppColors.textMuted,
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: AppColors.primary,
+                  inactiveThumbColor: AppColors.textSecondary,
                   inactiveTrackColor: AppColors.surfaceElevated,
                   onChanged: (val) {
                     context.read<AuthCubit>().toggleShiftStatus(val);
@@ -378,7 +394,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   value: _formatCop(state.totalCashCollected),
                   subtitle: 'Efectivo en mano',
                   icon: Icons.account_balance_wallet_outlined,
-                  iconColor: AppColors.primaryLight,
+                  iconColor: AppColors.primary,
                 ),
               ),
             ],
@@ -398,8 +414,8 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.background,
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AppColors.border),
       ),
       child: Column(
@@ -410,9 +426,13 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
             children: [
               Text(
                 title,
-                style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
               ),
-              Icon(icon, size: 15, color: iconColor),
+              Icon(icon, size: 16, color: iconColor),
             ],
           ),
           const SizedBox(height: 4),
@@ -427,7 +447,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
           const SizedBox(height: 2),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 10, color: AppColors.textMuted),
+            style: const TextStyle(fontSize: 10.5, color: AppColors.textMuted),
           ),
         ],
       ),
@@ -469,23 +489,30 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     return Expanded(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8),
+          padding: const EdgeInsets.symmetric(vertical: 9),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: isSelected ? AppColors.primary : AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isSelected ? AppColors.primary : AppColors.border,
+              color: isSelected ? AppColors.primary : AppColors.borderHighlight,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 4,
+                offset: const Offset(0, 1),
+              ),
+            ],
           ),
           child: Text(
             label,
             style: TextStyle(
               fontSize: 12,
-              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-              color: isSelected ? Colors.black : AppColors.textSecondary,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+              color: isSelected ? Colors.white : AppColors.textSecondary,
             ),
           ),
         ),

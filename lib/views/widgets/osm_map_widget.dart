@@ -142,11 +142,11 @@ class _OsmMapWidgetState extends State<OsmMapWidget> {
               // Botón encuadrar ruta completa
               FloatingActionButton.small(
                 heroTag: 'fab_fit_route',
-                backgroundColor: AppColors.surfaceElevated,
+                backgroundColor: AppColors.surface,
                 foregroundColor: AppColors.textPrimary,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  side: const BorderSide(color: AppColors.border),
+                  side: const BorderSide(color: AppColors.borderHighlight),
                 ),
                 onPressed: _fitBothMarkers,
                 child: const Icon(Icons.route_outlined, size: 20),
@@ -157,7 +157,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget> {
               FloatingActionButton(
                 heroTag: 'fab_center_me',
                 backgroundColor: AppColors.primary,
-                foregroundColor: Colors.black,
+                foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -211,7 +211,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget> {
             border: Border.all(color: Colors.white, width: 2.5),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.4),
+                color: Colors.black.withValues(alpha: 0.3),
                 blurRadius: 6,
                 offset: const Offset(0, 3),
               ),
@@ -220,7 +220,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget> {
           child: const Center(
             child: Icon(
               Icons.two_wheeler,
-              color: Colors.black,
+              color: Colors.white,
               size: 16,
             ),
           ),

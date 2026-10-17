@@ -29,31 +29,31 @@ class OrderCardWidget extends StatelessWidget {
     final isEnPunto = order.estado == OrderStatus.enPunto;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isEnCamino || isEnPunto
-              ? order.estadoColor.withValues(alpha: 0.8)
+              ? order.estadoColor.withValues(alpha: 0.65)
               : AppColors.border,
           width: isEnCamino || isEnPunto ? 1.5 : 1,
         ),
-        boxShadow: isEnCamino || isEnPunto
-            ? [
-                BoxShadow(
-                  color: order.estadoColor.withValues(alpha: 0.15),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                )
-              ]
-            : null,
+        boxShadow: [
+          BoxShadow(
+            color: isEnCamino || isEnPunto
+                ? order.estadoColor.withValues(alpha: 0.12)
+                : Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           onTap: onTap,
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -69,12 +69,12 @@ class OrderCardWidget extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: AppColors.surfaceElevated,
-                            borderRadius: BorderRadius.circular(8),
+                            color: AppColors.primarySoft,
+                            borderRadius: BorderRadius.circular(10),
                           ),
                           child: const Icon(
                             Icons.inventory_2_outlined,
-                            size: 14,
+                            size: 15,
                             color: AppColors.primary,
                           ),
                         ),
@@ -83,9 +83,9 @@ class OrderCardWidget extends StatelessWidget {
                           order.id,
                           style: const TextStyle(
                             color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
                             fontSize: 16,
-                            letterSpacing: 0.5,
+                            letterSpacing: 0.3,
                           ),
                         ),
                       ],
@@ -168,8 +168,8 @@ class OrderCardWidget extends StatelessWidget {
                         Text(
                           order.montoFormatted,
                           style: TextStyle(
-                            color: isDelivered ? AppColors.textSecondary : AppColors.primaryLight,
-                            fontWeight: FontWeight.w700,
+                            color: isDelivered ? AppColors.textSecondary : AppColors.primary,
+                            fontWeight: FontWeight.w800,
                             fontSize: 16,
                           ),
                         ),
@@ -187,7 +187,7 @@ class OrderCardWidget extends StatelessWidget {
                             Text(
                               order.metodoPago,
                               style: const TextStyle(
-                                color: AppColors.textMuted,
+                                color: AppColors.textSecondary,
                                 fontSize: 12,
                               ),
                             ),
@@ -198,17 +198,18 @@ class OrderCardWidget extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppColors.surfaceElevated,
-                        borderRadius: BorderRadius.circular(10),
+                        color: AppColors.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
                       ),
                       child: Row(
                         children: [
                           Text(
                             '${order.items.length} prod • ${order.totalUnidades} un.',
                             style: const TextStyle(
-                              color: AppColors.textSecondary,
+                              color: AppColors.textPrimary,
                               fontSize: 12,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.w600,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -234,10 +235,10 @@ class OrderCardWidget extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: order.estadoColor.withValues(alpha: 0.15),
+        color: order.estadoColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: order.estadoColor.withValues(alpha: 0.5),
+          color: order.estadoColor.withValues(alpha: 0.3),
           width: 1,
         ),
       ),

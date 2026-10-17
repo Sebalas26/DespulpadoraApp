@@ -16,13 +16,14 @@ import 'views/login_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configuración de barra de estado transparente y estilo oscuro
+  // Configuración de barra de estado transparente y estilo claro DGL
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
-      statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: AppColors.background,
-      systemNavigationBarIconBrightness: Brightness.light,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: AppColors.surface,
+      systemNavigationBarIconBrightness: Brightness.dark,
     ),
   );
 
@@ -70,9 +71,9 @@ class _PulpasProAppState extends State<PulpasProApp> {
         ),
       ],
       child: MaterialApp(
-        title: 'PulpasPro Domicilios',
+        title: 'DGL PulpasPro Domicilios',
         debugShowCheckedModeBanner: false,
-        theme: AppTheme.darkTheme,
+        theme: AppTheme.lightTheme,
         onGenerateRoute: AppRoutes.generateRoute,
         home: const AuthGate(),
       ),

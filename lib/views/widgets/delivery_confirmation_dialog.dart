@@ -105,9 +105,9 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
               Container(
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceElevated,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.primaryBorder),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -118,14 +118,15 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
                         Text(
                           'Monto a recaudar:',
                           style: TextStyle(
-                            color: AppColors.textSecondary,
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w600,
                             fontSize: 13,
                           ),
                         ),
                         Text(
                           'Efectivo contraentrega',
                           style: TextStyle(
-                            color: AppColors.textMuted,
+                            color: AppColors.textSecondary,
                             fontSize: 11,
                           ),
                         ),
@@ -134,7 +135,7 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
                     Text(
                       widget.order.montoFormatted,
                       style: const TextStyle(
-                        color: AppColors.primaryLight,
+                        color: AppColors.primary,
                         fontWeight: FontWeight.w800,
                         fontSize: 17,
                       ),
@@ -227,7 +228,7 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.black,
+                      foregroundColor: Colors.white,
                     ),
                     child: const Text('Confirmar Cobro'),
                   ),

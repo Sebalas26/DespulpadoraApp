@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../blocs/auth_cubit.dart';
 import '../config/api_config.dart';
 import '../config/routes.dart';
@@ -119,201 +120,331 @@ class _LoginScreenState extends State<LoginScreen> {
         }
       },
       child: Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 420),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      // Logo & Branding Hero
-                      Center(
-                        child: Container(
-                          width: 80,
-                          height: 80,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [AppColors.primary, AppColors.primaryDark],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          decoration: const BoxDecoration(
+            color: Color(0xFF1B4D2E),
+            image: DecorationImage(
+              image: AssetImage('assets/images/auth-hero-bg.jpg'),
+              fit: BoxFit.cover,
+            ),
+          ),
+          child: SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 34),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: const Color(0x0A000000)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.32),
+                          blurRadius: 36,
+                          offset: const Offset(0, 14),
+                        ),
+                      ],
+                    ),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Logo Box (Idéntico a .auth-brand-logo de la PWA)
+                          Center(
+                            child: Container(
+                              width: 64,
+                              height: 64,
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: const Color(0xFFECEEF0)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 5),
+                                  ),
+                                ],
+                              ),
+                              child: Image.asset(
+                                'assets/images/logo-dgl.png',
+                                fit: BoxFit.contain,
+                              ),
                             ),
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.primary.withValues(alpha: 0.35),
-                                blurRadius: 20,
-                                offset: const Offset(0, 8),
+                          ),
+                          const SizedBox(height: 16),
+
+                          Center(
+                            child: Text(
+                              'DGL DESPULPADORA',
+                              style: GoogleFonts.lato(
+                                fontSize: 11.5,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.8,
+                                color: const Color(0xFF1B5133),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+
+                          Center(
+                            child: Text(
+                              'DGL Domiciliarios',
+                              style: GoogleFonts.lato(
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900,
+                                letterSpacing: -0.4,
+                                color: const Color(0xFF0F291E),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Center(
+                            child: Text(
+                              'Ingresa tus credenciales para acceder a la plataforma',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.lato(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w400,
+                                color: const Color(0xFF6B7280),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 28),
+
+                          // Input Usuario
+                          Text(
+                            'Usuario o ID de Mensajero',
+                            style: GoogleFonts.lato(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF374151),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _userController,
+                            style: GoogleFonts.lato(
+                              fontSize: 14.5,
+                              color: const Color(0xFF111827),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: 'Ingresa tu usuario o ID',
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              prefixIcon: const Icon(
+                                Icons.person_outline_rounded,
+                                color: Color(0xFF9CA3AF),
+                                size: 20,
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF1B5133),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                            validator: (val) =>
+                                val == null || val.trim().isEmpty ? 'Ingresa tu usuario o correo' : null,
+                          ),
+
+                          const SizedBox(height: 18),
+
+                          // Input Contraseña
+                          Text(
+                            'Contraseña',
+                            style: GoogleFonts.lato(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: const Color(0xFF374151),
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          TextFormField(
+                            controller: _passwordController,
+                            obscureText: _obscurePassword,
+                            style: const TextStyle(
+                              fontSize: 14.5,
+                              color: Color(0xFF111827),
+                            ),
+                            decoration: InputDecoration(
+                              hintText: '••••••••',
+                              filled: true,
+                              fillColor: const Color(0xFFF9FAFB),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                                color: Color(0xFF9CA3AF),
+                                size: 20,
+                              ),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  _obscurePassword
+                                      ? Icons.visibility_outlined
+                                      : Icons.visibility_off_outlined,
+                                  color: const Color(0xFF9CA3AF),
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    _obscurePassword = !_obscurePassword;
+                                  });
+                                },
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                              enabledBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                              ),
+                              focusedBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: Color(0xFF1B5133),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                            validator: (val) =>
+                                val == null || val.isEmpty ? 'Ingresa tu contraseña' : null,
+                          ),
+
+                          const SizedBox(height: 14),
+
+                          // Remember Session Checkbox
+                          Row(
+                            children: [
+                              SizedBox(
+                                height: 22,
+                                width: 22,
+                                child: Checkbox(
+                                  value: _rememberSession,
+                                  activeColor: const Color(0xFF1B5133),
+                                  checkColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  onChanged: (val) {
+                                    setState(() {
+                                      _rememberSession = val ?? true;
+                                    });
+                                  },
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Recordar mi sesión en este dispositivo',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: Color(0xFF6B7280),
+                                ),
                               ),
                             ],
                           ),
-                          child: const Icon(
-                            Icons.two_wheeler,
-                            color: Colors.black,
-                            size: 38,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 20),
 
-                      const Center(
-                        child: Text(
-                          'PulpasPro Domicilios',
-                          style: TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Center(
-                        child: Text(
-                          'Portal Móvil de Mensajeros & Despachos',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ),
+                          const SizedBox(height: 24),
 
-                      const SizedBox(height: 36),
-
-                      // Input Usuario
-                      const Text(
-                        'Usuario o ID de Mensajero',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: _userController,
-                        decoration: const InputDecoration(
-                          hintText: 'Ej. MENSAJERO-01',
-                          prefixIcon: Icon(Icons.person_rounded),
-                        ),
-                        validator: (val) =>
-                            val == null || val.trim().isEmpty ? 'Ingresa tu usuario o correo' : null,
-                      ),
-
-                      const SizedBox(height: 18),
-
-                      // Input Contraseña
-                      const Text(
-                        'Contraseña',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      TextFormField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-                        decoration: InputDecoration(
-                          hintText: '••••••••',
-                          prefixIcon: const Icon(Icons.lock_outline_rounded),
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword
-                                  ? Icons.visibility_off_outlined
-                                  : Icons.visibility_outlined,
-                            ),
-                            onPressed: () {
-                              setState(() {
-                                _obscurePassword = !_obscurePassword;
-                              });
+                          // Botón Iniciar Sesión (Pill / Cápsula igual a PWA)
+                          BlocBuilder<AuthCubit, AuthState>(
+                            builder: (context, state) {
+                              final isLoading = state is AuthLoading;
+                              return ElevatedButton(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF1B5133),
+                                  foregroundColor: Colors.white,
+                                  elevation: 4,
+                                  shadowColor: const Color(0x401B5133),
+                                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                                  shape: const StadiumBorder(),
+                                ),
+                                onPressed: isLoading ? null : _submit,
+                                child: isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            'Iniciar Turno',
+                                            style: GoogleFonts.lato(
+                                              fontSize: 15.5,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          const Icon(Icons.arrow_forward_rounded, size: 18),
+                                        ],
+                                      ),
+                              );
                             },
                           ),
-                        ),
-                        validator: (val) =>
-                            val == null || val.isEmpty ? 'Ingresa tu contraseña' : null,
-                      ),
 
-                      const SizedBox(height: 12),
+                          const SizedBox(height: 22),
+                          const Divider(color: Color(0xFFE5E7EB), height: 1),
+                          const SizedBox(height: 12),
 
-                      // Remember Session Checkbox
-                      Row(
-                        children: [
-                          SizedBox(
-                            height: 24,
-                            width: 24,
-                            child: Checkbox(
-                              value: _rememberSession,
-                              activeColor: AppColors.primary,
-                              checkColor: Colors.black,
-                              onChanged: (val) {
-                                setState(() {
-                                  _rememberSession = val ?? true;
-                                });
-                              },
+                          // Opciones de Servidor + Pie de tarjeta
+                          Center(
+                            child: TextButton.icon(
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                minimumSize: Size.zero,
+                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
+                              icon: const Icon(Icons.tune_rounded, size: 15, color: Color(0xFF6B7280)),
+                              label: const Text(
+                                'Ajustar Servidor IP',
+                                style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+                              ),
+                              onPressed: _showServerConfigModal,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          const Text(
-                            'Recordar sesión en este dispositivo',
-                            style: TextStyle(
-                              fontSize: 13,
-                              color: AppColors.textSecondary,
+                          const SizedBox(height: 4),
+                          const Center(
+                            child: Text(
+                              'DGL Despulpadora · v2.0 Flutter · 2026',
+                              style: TextStyle(
+                                fontSize: 11.5,
+                                color: Color(0xFF9CA3AF),
+                              ),
                             ),
                           ),
                         ],
                       ),
-
-                      const SizedBox(height: 28),
-
-                      // Botón Iniciar Sesión
-                      BlocBuilder<AuthCubit, AuthState>(
-                        builder: (context, state) {
-                          final isLoading = state is AuthLoading;
-                          return ElevatedButton(
-                            onPressed: isLoading ? null : _submit,
-                            child: isLoading
-                                ? const SizedBox(
-                                    height: 22,
-                                    width: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.black,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Iniciar Turno',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 20),
-
-                      // Opciones de desarrollo / Servidor
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          TextButton.icon(
-                            icon: const Icon(Icons.tune_rounded, size: 16, color: AppColors.textMuted),
-                            label: const Text(
-                              'Ajustar Servidor IP',
-                              style: TextStyle(color: AppColors.textMuted, fontSize: 12),
-                            ),
-                            onPressed: _showServerConfigModal,
-                          ),
-                        ],
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
