@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>PulpasPro Domicilios</string>
+	<string>Dgl Domi</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>PulpasPro necesita acceso a tu ubicación para guiar tus entregas y transmitir tu posición en tiempo real a la central de despachos.</string>
 	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -28,7 +28,7 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>despulpadora_app</string>
+	<string>Dgl Domi</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>

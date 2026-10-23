@@ -2,10 +2,32 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
 
-/// Modal para confirmar la entrega exitosa y el recaudo de dinero en efectivo
+/// Opción visual de Forma de Pago en la confirmación de entrega
+class PaymentMethodOption {
+  final String id;
+  final String label;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+
+  const PaymentMethodOption({
+    required this.id,
+    required this.label,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+  });
+}
+
+/// Modal para confirmar la entrega exitosa, seleccionar la forma de pago y registrar el recaudo
 class DeliveryConfirmationDialog extends StatefulWidget {
   final OrderModel order;
-  final Function(double cashReceived, String receiverName, String notes) onConfirm;
+  final void Function(
+    double cashReceived,
+    String receiverName,
+    String notes,
+    String paymentMethod,
+  ) onConfirm;
 
   const DeliveryConfirmationDialog({
     super.key,
@@ -14,22 +36,79 @@ class DeliveryConfirmationDialog extends StatefulWidget {
   });
 
   @override
-  State<DeliveryConfirmationDialog> createState() => _DeliveryConfirmationDialogState();
+  State<DeliveryConfirmationDialog> createState() =>
+      _DeliveryConfirmationDialogState();
 }
 
-class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog> {
+class _DeliveryConfirmationDialogState
+    extends State<DeliveryConfirmationDialog> {
+  static const List<PaymentMethodOption> _paymentOptions = [
+    PaymentMethodOption(
+      id: 'Efectivo',
+      label: 'Efectivo',
+      subtitle: 'Recaudo en billetes/monedas',
+      icon: Icons.payments_outlined,
+      color: Color(0xFF1E5E3A),
+    ),
+    PaymentMethodOption(
+      id: 'Nequi',
+      label: 'Nequi',
+      subtitle: 'Transferencia verificada',
+      icon: Icons.phone_android_rounded,
+      color: Color(0xFF7C3AED),
+    ),
+    PaymentMethodOption(
+      id: 'Bancolombia',
+      label: 'Bancolombia',
+      subtitle: 'Transferencia / QR',
+      icon: Icons.account_balance_rounded,
+      color: Color(0xFF2563EB),
+    ),
+    PaymentMethodOption(
+      id: 'Daviplata',
+      label: 'Daviplata',
+      subtitle: 'Billetera digital',
+      icon: Icons.qr_code_2_rounded,
+      color: Color(0xFFDC2626),
+    ),
+    PaymentMethodOption(
+      id: 'Crédito',
+      label: 'Crédito',
+      subtitle: 'Cuenta por cobrar autorizada',
+      icon: Icons.receipt_long_rounded,
+      color: Color(0xFFD97706),
+    ),
+  ];
+
   late final TextEditingController _cashController;
   late final TextEditingController _receiverController;
   late final TextEditingController _notesController;
+  late String _selectedPaymentMethod;
 
   @override
   void initState() {
     super.initState();
+    _selectedPaymentMethod = _detectInitialMethod(widget.order.metodoPago);
     _cashController = TextEditingController(
-      text: widget.order.requiereCobro ? widget.order.montoTotal.toInt().toString() : '0',
+      text: widget.order.montoTotal.toInt().toString(),
     );
-    _receiverController = TextEditingController(text: widget.order.clienteNombre);
+    _receiverController = TextEditingController(
+      text: widget.order.clienteNombre,
+    );
     _notesController = TextEditingController();
+  }
+
+  String _detectInitialMethod(String rawMethod) {
+    final lower = rawMethod.toLowerCase();
+    if (lower.contains('nequi')) return 'Nequi';
+    if (lower.contains('bancolombia') || lower.contains('transferencia')) {
+      return 'Bancolombia';
+    }
+    if (lower.contains('daviplata')) return 'Daviplata';
+    if (lower.contains('crédito') || lower.contains('credito')) {
+      return 'Crédito';
+    }
+    return 'Efectivo';
   }
 
   @override
@@ -42,13 +121,15 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
 
   @override
   Widget build(BuildContext context) {
+    final isCashSelected = _selectedPaymentMethod == 'Efectivo';
+
     return Dialog(
       backgroundColor: AppColors.surface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
         side: const BorderSide(color: AppColors.border),
       ),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -76,18 +157,20 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'Confirmar Entrega',
+                        'Confirmar Entrega y Pago',
                         style: TextStyle(
                           color: AppColors.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
                         ),
                       ),
                       Text(
-                        widget.order.id,
+                        '${widget.order.id} • ${widget.order.clienteNombre}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: AppColors.textSecondary,
-                          fontSize: 13,
+                          fontSize: 12.5,
                         ),
                       ),
                     ],
@@ -96,60 +179,138 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
               ],
             ),
 
-            const SizedBox(height: 18),
-            const Divider(),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            const SizedBox(height: 14),
 
-            // Card Resumen de Cobro
-            if (widget.order.requiereCobro) ...[
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppColors.primarySoft,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.primaryBorder),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Monto a recaudar:',
-                          style: TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
+            // Card Resumen del Valor del Pedido
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: AppColors.primarySoft,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: AppColors.primaryBorder),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Total del pedido:',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
                         ),
-                        Text(
-                          'Efectivo contraentrega',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 11,
-                          ),
+                      ),
+                      Text(
+                        'Forma seleccionada: $_selectedPaymentMethod',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
                         ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  Text(
+                    widget.order.montoFormatted,
+                    style: const TextStyle(
+                      color: AppColors.primary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 17,
                     ),
-                    Text(
-                      widget.order.montoFormatted,
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 17,
+                  ),
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Selector de Formas de Pago
+            const Text(
+              'Selecciona la Forma de Pago',
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w800,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _paymentOptions.map((opt) {
+                final isSelected = _selectedPaymentMethod == opt.id;
+                return InkWell(
+                  onTap: () {
+                    setState(() {
+                      _selectedPaymentMethod = opt.id;
+                    });
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 11,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? opt.color.withValues(alpha: 0.12)
+                          : AppColors.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isSelected ? opt.color : AppColors.borderHighlight,
+                        width: isSelected ? 1.6 : 1.0,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              // Campo Efectivo Recibido
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          opt.icon,
+                          size: 16,
+                          color: isSelected ? opt.color : AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          opt.label,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight:
+                                isSelected ? FontWeight.w900 : FontWeight.w700,
+                            color: isSelected
+                                ? opt.color
+                                : AppColors.textPrimary,
+                          ),
+                        ),
+                        if (isSelected) ...[
+                          const SizedBox(width: 5),
+                          Icon(
+                            Icons.check_circle_rounded,
+                            size: 14,
+                            color: opt.color,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+
+            const SizedBox(height: 16),
+
+            // Campo de monto recibido cuando es Efectivo o aviso de pago digital/crédito
+            if (isCashSelected) ...[
               const Text(
                 'Efectivo Recibido (\$ COP)',
                 style: TextStyle(
                   color: AppColors.textPrimary,
-                  fontWeight: FontWeight.w600,
+                  fontWeight: FontWeight.w700,
                   fontSize: 13,
                 ),
               ),
@@ -163,6 +324,42 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
                 ),
               ),
               const SizedBox(height: 14),
+            ] else ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderHighlight),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      size: 17,
+                      color: AppColors.info,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _selectedPaymentMethod == 'Crédito'
+                            ? 'Se registrará como cuenta por cobrar a crédito.'
+                            : 'Verifica el comprobante de pago por $_selectedPaymentMethod antes de entregar.',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
             ],
 
             // Nombre de quién recibe
@@ -170,7 +367,7 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
               'Nombre de quién recibe',
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
             ),
@@ -187,10 +384,10 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
 
             // Observaciones opcionales
             const Text(
-              'Observaciones de entrega (Opcional)',
+              'Observaciones / N° Comprobante (Opcional)',
               style: TextStyle(
                 color: AppColors.textPrimary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
                 fontSize: 13,
               ),
             ),
@@ -200,11 +397,11 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
               maxLines: 2,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.notes_rounded),
-                hintText: 'Ej. Recibió portero Luis en torre 2',
+                hintText: 'Ej. Recibió en portería / Comprobante Nequi #4589',
               ),
             ),
 
-            const SizedBox(height: 22),
+            const SizedBox(height: 20),
 
             // Botones de Acción
             Row(
@@ -218,19 +415,28 @@ class _DeliveryConfirmationDialogState extends State<DeliveryConfirmationDialog>
                 const SizedBox(width: 12),
                 Expanded(
                   flex: 2,
-                  child: ElevatedButton(
+                  child: ElevatedButton.icon(
                     onPressed: () {
-                      final cash = double.tryParse(_cashController.text) ?? widget.order.montoTotal;
+                      final cash = isCashSelected
+                          ? (double.tryParse(_cashController.text) ??
+                              widget.order.montoTotal)
+                          : widget.order.montoTotal;
                       final receiver = _receiverController.text.trim();
                       final notes = _notesController.text.trim();
-                      widget.onConfirm(cash, receiver, notes);
+                      widget.onConfirm(
+                        cash,
+                        receiver,
+                        notes,
+                        _selectedPaymentMethod,
+                      );
                       Navigator.of(context).pop();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text('Confirmar Cobro'),
+                    icon: const Icon(Icons.check_circle_rounded, size: 18),
+                    label: const Text('Confirmar Entrega'),
                   ),
                 ),
               ],

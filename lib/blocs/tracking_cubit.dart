@@ -106,8 +106,14 @@ class TrackingCubit extends Cubit<TrackingState> {
     // Obtener primera posición inmediata
     final initialPos = await _locationService.getCurrentPosition();
     if (initialPos != null) {
+      final safeLoc = LocationService.isWithinColombia(
+        initialPos.latitude,
+        initialPos.longitude,
+      )
+          ? LatLng(initialPos.latitude, initialPos.longitude)
+          : LocationService.defaultLocation;
       emit(state.copyWith(
-        currentLocation: LatLng(initialPos.latitude, initialPos.longitude),
+        currentLocation: safeLoc,
         speed: initialPos.speed * 3.6, // m/s a km/h
         heading: initialPos.heading,
       ));
@@ -133,13 +139,18 @@ class TrackingCubit extends Cubit<TrackingState> {
 
   Future<void> _sendTelemetryPacket(Position position) async {
     final battery = await _locationService.getBatteryLevel();
-    final currentLatLng = LatLng(position.latitude, position.longitude);
+    final currentLatLng = LocationService.isWithinColombia(
+      position.latitude,
+      position.longitude,
+    )
+        ? LatLng(position.latitude, position.longitude)
+        : LocationService.defaultLocation;
 
     final payload = CourierLocationPayload(
       courierId: _currentCourier?.id ?? 'MENSAJERO-01',
       courierName: _currentCourier?.nombre ?? 'Carlos Mendoza',
-      latitude: position.latitude,
-      longitude: position.longitude,
+      latitude: currentLatLng.latitude,
+      longitude: currentLatLng.longitude,
       speed: position.speed > 0 ? (position.speed * 3.6) : 0.0,
       heading: position.heading,
       activeOrderId: _activeOrderId,

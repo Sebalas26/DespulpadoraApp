@@ -2,16 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
+import 'order_items_dialog.dart';
 
-/// Tarjeta interactiva para la lista de pedidos en el Dashboard
+/// Tarjeta informativa para la lista de pedidos en el Dashboard (Sincronizada con diseño PWA)
+/// No es clickeable en su totalidad; únicamente el botón verde de productos abre el diálogo de pulpas.
 class OrderCardWidget extends StatelessWidget {
   final OrderModel order;
-  final VoidCallback onTap;
+  final int? stopNumber;
 
   const OrderCardWidget({
     super.key,
     required this.order,
-    required this.onTap,
+    this.stopNumber,
   });
 
   Future<void> _makeCall(String phone) async {
@@ -29,10 +31,10 @@ class OrderCardWidget extends StatelessWidget {
     final isEnPunto = order.estado == OrderStatus.enPunto;
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: isEnCamino || isEnPunto
               ? order.estadoColor.withValues(alpha: 0.65)
@@ -49,183 +51,223 @@ class OrderCardWidget extends StatelessWidget {
           ),
         ],
       ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Cabecera: Número de Parada + Badge Amarillo ID de Pedido + Estado
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    if (stopNumber != null) ...[
+                      Container(
+                        width: 28,
+                        height: 28,
+                        decoration: BoxDecoration(
+                          color: isDelivered
+                              ? const Color(0xFF10B981)
+                              : isEnCamino || isEnPunto
+                                  ? AppColors.primary
+                                  : const Color(0xFF2563EB),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(
+                          child: isDelivered
+                              ? const Icon(
+                                  Icons.check_rounded,
+                                  size: 16,
+                                  color: Colors.white,
+                                )
+                              : Text(
+                                  '#$stopNumber',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3.5,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF08A),
+                        borderRadius: BorderRadius.circular(7),
+                        border: Border.all(color: const Color(0xFFFDE047)),
+                      ),
+                      child: Text(
+                        order.id,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12.5,
+                          letterSpacing: 0.2,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                _buildStatusBadge(order),
+              ],
+            ),
+
+            const SizedBox(height: 12),
+
+            // Cliente
+            Row(
+              children: [
+                const Icon(
+                  Icons.storefront_outlined,
+                  size: 18,
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    order.clienteNombre,
+                    style: const TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (order.clienteTelefono.isNotEmpty)
+                  IconButton(
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(
+                      Icons.phone_rounded,
+                      color: AppColors.primary,
+                      size: 19,
+                    ),
+                    onPressed: () => _makeCall(order.clienteTelefono),
+                  ),
+              ],
+            ),
+
+            const SizedBox(height: 4),
+
+            // Dirección y Barrio
+            Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Cabecera: ID de Pedido + Badge de Estado
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: AppColors.primarySoft,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: const Icon(
-                            Icons.inventory_2_outlined,
-                            size: 15,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          order.id,
-                          style: const TextStyle(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                            letterSpacing: 0.3,
-                          ),
-                        ),
-                      ],
-                    ),
-                    _buildStatusBadge(order),
-                  ],
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 17,
+                  color: AppColors.textSecondary,
                 ),
-
-                const SizedBox(height: 14),
-
-                // Cliente
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.person_outline_rounded,
-                      size: 18,
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    '${order.direccion} • ${order.barrio}',
+                    style: const TextStyle(
                       color: AppColors.textSecondary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        order.clienteNombre,
-                        style: const TextStyle(
-                          color: AppColors.textPrimary,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    if (order.clienteTelefono.isNotEmpty)
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(
-                          Icons.phone_rounded,
-                          color: AppColors.primary,
-                          size: 20,
-                        ),
-                        onPressed: () => _makeCall(order.clienteTelefono),
-                      ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
 
-                const SizedBox(height: 6),
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
 
-                // Dirección y Barrio
-                Row(
+            // Pie: Monto + Método de Pago + Botón Verde Clickeable para abrir Dialog de Pulpas
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(
-                      Icons.location_on_outlined,
-                      size: 18,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${order.direccion} • ${order.barrio}',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                        ),
+                    Text(
+                      order.montoFormatted,
+                      style: TextStyle(
+                        color: isDelivered
+                            ? AppColors.textSecondary
+                            : AppColors.primary,
+                        fontWeight: FontWeight.w900,
+                        fontSize: 15.5,
                       ),
                     ),
-                  ],
-                ),
-
-                const SizedBox(height: 12),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-
-                // Pie: Monto + Método de Pago + Desglose breve
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    const SizedBox(height: 2),
+                    Row(
                       children: [
-                        Text(
-                          order.montoFormatted,
-                          style: TextStyle(
-                            color: isDelivered ? AppColors.textSecondary : AppColors.primary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 16,
-                          ),
+                        Icon(
+                          order.requiereCobro
+                              ? Icons.payments_outlined
+                              : Icons.check_circle_outline,
+                          size: 13,
+                          color: AppColors.textMuted,
                         ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(
-                              order.requiereCobro
-                                  ? Icons.payments_outlined
-                                  : Icons.check_circle_outline,
-                              size: 13,
-                              color: AppColors.textMuted,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              order.metodoPago,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(width: 4),
+                        Text(
+                          order.metodoPago,
+                          style: const TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 11.5,
+                          ),
                         ),
                       ],
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ],
+                ),
+                Material(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(10),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      OrderItemsDialog.show(
+                        context,
+                        order: order,
+                        stopNumber: stopNumber,
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 11,
+                        vertical: 7,
+                      ),
                       decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.primaryBorder),
                       ),
                       child: Row(
                         children: [
                           Text(
                             '${order.items.length} prod • ${order.totalUnidades} un.',
                             style: const TextStyle(
-                              color: AppColors.textPrimary,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(width: 6),
+                          const SizedBox(width: 5),
                           const Icon(
                             Icons.arrow_forward_ios_rounded,
-                            size: 12,
+                            size: 11,
                             color: AppColors.primary,
                           ),
                         ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -233,12 +275,12 @@ class OrderCardWidget extends StatelessWidget {
 
   Widget _buildStatusBadge(OrderModel order) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
       decoration: BoxDecoration(
-        color: order.estadoColor.withValues(alpha: 0.1),
+        color: order.estadoColor.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: order.estadoColor.withValues(alpha: 0.3),
+          color: order.estadoColor.withValues(alpha: 0.35),
           width: 1,
         ),
       ),
@@ -246,20 +288,20 @@ class OrderCardWidget extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: 7,
-            height: 7,
+            width: 6.5,
+            height: 6.5,
             decoration: BoxDecoration(
               color: order.estadoColor,
               shape: BoxShape.circle,
             ),
           ),
-          const SizedBox(width: 6),
+          const SizedBox(width: 5),
           Text(
             order.estadoLabel,
             style: TextStyle(
               color: order.estadoColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
             ),
           ),
         ],

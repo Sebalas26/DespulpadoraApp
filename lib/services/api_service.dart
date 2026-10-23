@@ -56,7 +56,7 @@ class ApiService {
         montoTotal: 84000,
         metodoPago: 'Transferencia Nequi (Verificado)',
         requiereCobro: false,
-        estado: OrderStatus.enCamino,
+        estado: OrderStatus.asignado,
         prioridad: 2,
         notasEntrega: 'Pago previo verificado por administración. Solo entregar y firmar remisión.',
         items: [
@@ -69,7 +69,7 @@ class ApiService {
         clienteNombre: 'Heladería Artesanal Frutos del Bosque',
         clienteTelefono: '+57 320 998 1122',
         direccion: 'Calle 93B # 13-24',
-        barrio: 'Chicó',
+        barrio: 'Chicó Parque 93',
         ciudad: 'Bogotá',
         latitud: 4.67845,
         longitud: -74.05312,
@@ -84,7 +84,28 @@ class ApiService {
           OrderItem(nombre: 'Pulpa Feijoa', presentacion: '1000g / 1Kg', cantidad: 8, precioUnitario: 8800),
           OrderItem(nombre: 'Pulpa Piña Oro Miel', presentacion: '1000g / 1Kg', cantidad: 6, precioUnitario: 9100),
         ],
-      )
+      ),
+      OrderModel(
+        id: 'ORD-2026-004',
+        clienteNombre: 'Café & Panadería Usaquén Gourmet',
+        clienteTelefono: '+57 310 987 6543',
+        direccion: 'Cra 6A # 119-24',
+        barrio: 'Usaquén',
+        ciudad: 'Bogotá',
+        latitud: 4.69800,
+        longitud: -74.03100,
+        montoTotal: 126400,
+        metodoPago: 'Efectivo Contraentrega',
+        requiereCobro: true,
+        estado: OrderStatus.asignado,
+        prioridad: 2,
+        notasEntrega: 'Entregar en puerta lateral sobre la Carrera 6A.',
+        items: [
+          OrderItem(nombre: 'Pulpa Mora de Castilla', presentacion: '140g (Porción)', cantidad: 24, precioUnitario: 2200),
+          OrderItem(nombre: 'Pulpa Maracuyá', presentacion: '140g (Porción)', cantidad: 20, precioUnitario: 2300),
+          OrderItem(nombre: 'Pulpa Guanábana', presentacion: '250g', cantidad: 8, precioUnitario: 3450),
+        ],
+      ),
     ];
   }
 

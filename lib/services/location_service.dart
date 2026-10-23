@@ -8,8 +8,48 @@ class LocationService {
   final Battery _battery = Battery();
   StreamSubscription<Position>? _positionSubscription;
 
-  /// Coordenada inicial por defecto (Bogotá Centro - Norte)
-  static const LatLng defaultLocation = LatLng(4.67812, -74.05834);
+  /// Coordenada inicial por defecto en Bogotá (Sector Calle 80 / Av. Boyacá - Salida Cava)
+  static const LatLng defaultLocation = LatLng(4.69680, -74.09250);
+
+  /// Verifica si una coordenada GPS está dentro de Colombia (evita que el emulador Android/iOS
+  /// envíe la coordenada por defecto de California 37.42, -122.084 que rompe el enrutamiento vial)
+  static bool isWithinColombia(double lat, double lng) {
+    return lat >= -4.5 && lat <= 13.5 && lng >= -80.0 && lng <= -66.5;
+  }
+
+  /// Normaliza una posición para garantizar que en emuladores fuera de Colombia use Bogotá
+  Position _normalizePositionForBogota(Position pos) {
+    if (isWithinColombia(pos.latitude, pos.longitude)) {
+      return pos;
+    }
+    return Position(
+      latitude: defaultLocation.latitude,
+      longitude: defaultLocation.longitude,
+      timestamp: DateTime.now(),
+      altitude: 2600.0,
+      altitudeAccuracy: 5.0,
+      accuracy: 5.0,
+      heading: pos.heading,
+      headingAccuracy: 5.0,
+      speed: pos.speed > 0 ? pos.speed : 7.5,
+      speedAccuracy: 1.0,
+    );
+  }
+
+  Position _buildDefaultBogotaPosition() {
+    return Position(
+      latitude: defaultLocation.latitude,
+      longitude: defaultLocation.longitude,
+      timestamp: DateTime.now(),
+      altitude: 2600.0,
+      altitudeAccuracy: 5.0,
+      accuracy: 5.0,
+      heading: 180.0,
+      headingAccuracy: 5.0,
+      speed: 7.5,
+      speedAccuracy: 1.0,
+    );
+  }
 
   /// Verifica y solicita permisos de ubicación
   Future<bool> checkAndRequestPermissions() async {
@@ -19,7 +59,6 @@ class LocationService {
     // Verificar si el GPS está habilitado en el dispositivo
     serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) {
-      // Servicio deshabilitado
       return false;
     }
 
@@ -38,46 +77,23 @@ class LocationService {
     return true;
   }
 
-  /// Obtiene la posición actual inmediata del dispositivo
+  /// Obtiene la posición actual inmediata del dispositivo (normalizada a Bogotá si es emulador en USA)
   Future<Position?> getCurrentPosition() async {
     try {
       final hasPermission = await checkAndRequestPermissions();
       if (!hasPermission) {
-        // Fallback a posición simulada si no hay permisos (útil para emuladores)
-        return Position(
-          latitude: defaultLocation.latitude,
-          longitude: defaultLocation.longitude,
-          timestamp: DateTime.now(),
-          altitude: 2600.0,
-          altitudeAccuracy: 5.0,
-          accuracy: 5.0,
-          heading: 180.0,
-          headingAccuracy: 5.0,
-          speed: 25.0,
-          speedAccuracy: 1.0,
-        );
+        return _buildDefaultBogotaPosition();
       }
 
-      return await Geolocator.getCurrentPosition(
+      final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.high,
           timeLimit: Duration(seconds: 5),
         ),
       );
+      return _normalizePositionForBogota(pos);
     } catch (e) {
-      // Retorna posición por defecto en caso de error/timeout
-      return Position(
-        latitude: defaultLocation.latitude,
-        longitude: defaultLocation.longitude,
-        timestamp: DateTime.now(),
-        altitude: 2600.0,
-        altitudeAccuracy: 5.0,
-        accuracy: 5.0,
-        heading: 180.0,
-        headingAccuracy: 5.0,
-        speed: 0.0,
-        speedAccuracy: 0.0,
-      );
+      return _buildDefaultBogotaPosition();
     }
   }
 
@@ -88,7 +104,9 @@ class LocationService {
       distanceFilter: 5, // Cada 5 metros o por tiempo
     );
 
-    return Geolocator.getPositionStream(locationSettings: locationSettings);
+    return Geolocator.getPositionStream(
+      locationSettings: locationSettings,
+    ).map(_normalizePositionForBogota);
   }
 
   /// Obtiene el porcentaje de batería del dispositivo de forma segura

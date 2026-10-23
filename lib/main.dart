@@ -71,7 +71,7 @@ class _PulpasProAppState extends State<PulpasProApp> {
         ),
       ],
       child: MaterialApp(
-        title: 'DGL PulpasPro Domicilios',
+        title: 'Dgl Domi',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         onGenerateRoute: AppRoutes.generateRoute,
