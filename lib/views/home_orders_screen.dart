@@ -9,6 +9,7 @@ import '../config/routes.dart';
 import '../config/theme.dart';
 import '../services/websocket_service.dart';
 import 'widgets/order_card_widget.dart';
+import 'widgets/route_reception_camera_dialog.dart';
 
 /// Dashboard Principal de Domicilios y Rutas del Día
 class HomeOrdersScreen extends StatefulWidget {
@@ -28,11 +29,23 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
   void initState() {
     super.initState();
     _refreshData();
-    final isCurrentlyOnline =
-        context.read<AuthCubit>().currentCourier?.isOnline ?? false;
-    if (isCurrentlyOnline) {
-      _triggerShiftShimmerLoad();
-    }
+  }
+
+  Future<void> _handleOpenReceptionCamera(OrdersState ordersState) async {
+    final photoTimestamp = await RouteReceptionCameraDialog.show(
+      context,
+      routeCode: ordersState.assignedRouteCode,
+      routeZone: ordersState.assignedRouteZone,
+      totalOrders: ordersState.totalCount,
+      totalUnits: ordersState.totalUnitsInRoute,
+    );
+
+    if (!mounted || photoTimestamp == null) return;
+
+    context
+        .read<OrdersCubit>()
+        .confirmRouteReception(photoTimestamp: photoTimestamp);
+    _triggerShiftShimmerLoad();
   }
 
   @override
@@ -162,19 +175,18 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
 
     if (selectedAction == 'refresh') {
       _refreshData();
-      context.read<OrdersCubit>().setRouteAssignment(true);
-      if (context.read<AuthCubit>().currentCourier?.isOnline ?? false) {
+      if (context.read<OrdersCubit>().state.isRouteReceived) {
         _triggerShiftShimmerLoad();
       }
     } else if (selectedAction == 'toggle_route_assignment') {
-      final currentlyAssigned =
-          context.read<OrdersCubit>().state.hasAssignedRoute;
-      final nextState = !currentlyAssigned;
-      context.read<OrdersCubit>().setRouteAssignment(nextState);
-      if (nextState &&
-          (context.read<AuthCubit>().currentCourier?.isOnline ?? false)) {
-        _triggerShiftShimmerLoad();
+      final ordersCubit = context.read<OrdersCubit>();
+      final currentlyAssigned = ordersCubit.state.hasAssignedRoute;
+      if (!currentlyAssigned) {
+        // Simular que llega una ruta asignada desde la PWA (pendiente por recibir pedido con foto)
+        ordersCubit.setRouteAssignment(true, received: false);
       } else {
+        // Volver a estado sin ruta asignada
+        ordersCubit.setRouteAssignment(false, received: false);
         _shimmerTimer?.cancel();
         setState(() => _isSimulatingEndpointLoad = false);
       }
@@ -197,7 +209,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final courier = context.watch<AuthCubit>().currentCourier;
-    final isOnShift = courier?.isOnline ?? false;
 
     return Scaffold(
       appBar: AppBar(
@@ -348,24 +359,34 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
             context.read<TrackingCubit>().updateActiveOrder(state.activeOrderId);
           },
           builder: (context, ordersState) {
-            final showAssignedUi = isOnShift && ordersState.hasAssignedRoute;
+            final hasRoute = ordersState.hasAssignedRoute;
+            final isReceived = ordersState.isRouteReceived;
+            final showOrdersListUi = hasRoute && isReceived;
 
             return CustomScrollView(
               slivers: [
-                // 1. Resumen superior y Switch de Turno
-                SliverToBoxAdapter(
-                  child: _buildHeaderMetrics(context, ordersState, isOnShift),
-                ),
-
-                // 2. Si está en turno pero AÚN NO tiene ruta asignada, mostrar el aviso centrado abajo
-                if (isOnShift && !ordersState.hasAssignedRoute)
+                // CASO 1: Aún NO tiene una ruta asignada desde la PWA
+                if (!hasRoute)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: _buildNoRouteAssignedState(context),
                   ),
 
-                // 3. Solo mostrar Filtros y Lista de Pedidos cuando el turno está ACTIVO y TIENE RUTA ASIGNADA
-                if (showAssignedUi) ...[
+                // CASO 2: Tiene ruta asignada desde la PWA, pendiente por Recibir Pedido y Tomar Foto
+                if (hasRoute && !isReceived)
+                  SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _buildPendingRouteReceptionState(
+                      context,
+                      ordersState,
+                    ),
+                  ),
+
+                // CASO 3: Ya recibió el pedido y tomó la foto -> Mostrar Resumen + Filtros + Lista de Pedidos
+                if (showOrdersListUi) ...[
+                  SliverToBoxAdapter(
+                    child: _buildHeaderMetrics(context, ordersState),
+                  ),
                   SliverToBoxAdapter(
                     child: _isSimulatingEndpointLoad
                         ? const _FacebookShimmerFilterChips()
@@ -419,9 +440,9 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       ),
       floatingActionButton: BlocBuilder<OrdersCubit, OrdersState>(
         builder: (context, ordersState) {
-          // Ocultar el botón de Ver Ruta si está desconectado o si aún NO tiene ruta asignada
-          if (!isOnShift ||
-              !ordersState.hasAssignedRoute ||
+          // Mostrar Ver Ruta únicamente cuando ya recibió el pedido con foto
+          if (!ordersState.hasAssignedRoute ||
+              !ordersState.isRouteReceived ||
               ordersState.orders.isEmpty) {
             return const SizedBox.shrink();
           }
@@ -456,7 +477,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
   Widget _buildHeaderMetrics(
     BuildContext context,
     OrdersState state,
-    bool isOnShift,
   ) {
     return Container(
       margin: const EdgeInsets.all(16),
@@ -464,9 +484,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isOnShift ? AppColors.primaryBorder : AppColors.border,
-        ),
+        border: Border.all(color: AppColors.primaryBorder),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
@@ -477,9 +495,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
         gradient: LinearGradient(
           colors: [
             AppColors.surface,
-            isOnShift
-                ? AppColors.primarySoft.withValues(alpha: 0.65)
-                : AppColors.surface,
+            AppColors.primarySoft.withValues(alpha: 0.65),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -487,199 +503,152 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       ),
       child: Column(
         children: [
-          // Fila del Switch "En Turno"
+          // Cabecera de Ruta Activa y Pedido Recibido (Sin switch de Disponible)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 10,
-                          height: 10,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isOnShift
-                                ? AppColors.primary
-                                : AppColors.textMuted,
-                            boxShadow: isOnShift
-                                ? [
-                                    BoxShadow(
-                                      color: AppColors.primary
-                                          .withValues(alpha: 0.35),
-                                      blurRadius: 6,
-                                      spreadRadius: 1,
-                                    )
-                                  ]
-                                : null,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Text(
-                          isOnShift ? 'DISPONIBLE / EN TURNO' : 'DESCONECTADO',
-                          style: TextStyle(
-                            color: isOnShift
-                                ? AppColors.primary
-                                : AppColors.textSecondary,
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.primarySoft,
+                        borderRadius: BorderRadius.circular(11),
+                        border: Border.all(color: AppColors.primaryBorder),
+                      ),
+                      child: const Icon(
+                        Icons.route_rounded,
+                        color: AppColors.primary,
+                        size: 20,
+                      ),
                     ),
-                    const SizedBox(height: 5),
-                    if (!isOnShift)
-                      const Text(
-                        'Activa el switch para recibir rutas',
-                        style: TextStyle(
-                          fontSize: 11.5,
-                          color: AppColors.textSecondary,
-                        ),
-                      )
-                    else if (state.hasAssignedRoute)
-                      Row(
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(
-                            Icons.route_rounded,
-                            size: 14,
-                            color: AppColors.primary,
-                          ),
-                          const SizedBox(width: 5),
-                          Expanded(
-                            child: Text(
-                              'Ruta: ${state.assignedRouteCode} • ${state.assignedRouteZone}',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                                color: AppColors.textPrimary,
-                              ),
+                          Text(
+                            'Ruta: ${state.assignedRouteCode}',
+                            style: const TextStyle(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14,
+                              letterSpacing: 0.2,
                             ),
                           ),
-                        ],
-                      )
-                    else
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.hourglass_top_rounded,
-                            size: 13.5,
-                            color: AppColors.warning,
-                          ),
-                          const SizedBox(width: 5),
-                          const Expanded(
-                            child: Text(
-                              'Sin ruta asignada • Esperando despacho PWA',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textSecondary,
-                              ),
+                          const SizedBox(height: 2),
+                          Text(
+                            state.assignedRouteZone,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ],
                       ),
+                    ),
                   ],
                 ),
               ),
-              Transform.scale(
-                scale: 0.9,
-                child: Switch(
-                  value: isOnShift,
-                  activeThumbColor: Colors.white,
-                  activeTrackColor: AppColors.primary,
-                  inactiveThumbColor: AppColors.textSecondary,
-                  inactiveTrackColor: AppColors.surfaceElevated,
-                  onChanged: (val) {
-                    context.read<AuthCubit>().toggleShiftStatus(val);
-                    final courier = context.read<AuthCubit>().currentCourier;
-                    context.read<TrackingCubit>().syncWithShiftStatus(
-                          courier: courier?.copyWith(isOnline: val),
-                          activeOrderId: state.activeOrderId,
-                        );
-                    if (val && state.hasAssignedRoute) {
-                      _triggerShiftShimmerLoad();
-                    } else {
-                      _shimmerTimer?.cancel();
-                      setState(() => _isSimulatingEndpointLoad = false);
-                    }
-                  },
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5.5,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFD1FAE5),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFF6EE7B7)),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.verified_rounded,
+                      size: 14,
+                      color: Color(0xFF047857),
+                    ),
+                    SizedBox(width: 4),
+                    Text(
+                      'Pedido Recibido',
+                      style: TextStyle(
+                        color: Color(0xFF047857),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
 
-          // Las cards del informativo solo se muestran cuando el turno está ACTIVO y YA TIENE RUTA ASIGNADA
-          if (isOnShift && state.hasAssignedRoute) ...[
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            const SizedBox(height: 16),
+          const SizedBox(height: 16),
+          const Divider(height: 1),
+          const SizedBox(height: 16),
 
-            if (_isSimulatingEndpointLoad)
-              const _FacebookShimmerMetricsGrid()
-            else ...[
-              // Métricas en Grid de 2x2
-              Row(
-                children: [
-                  // Total Asignados
-                  Expanded(
-                    child: _buildMetricCard(
-                      title: 'Asignados Hoy',
-                      value: '${state.totalCount}',
-                      subtitle: '${state.pendingCount} pendientes',
-                      icon: Icons.inventory_2_outlined,
-                      iconColor: AppColors.info,
-                    ),
+          if (_isSimulatingEndpointLoad)
+            const _FacebookShimmerMetricsGrid()
+          else ...[
+            // Métricas en Grid de 2x2
+            Row(
+              children: [
+                // Total Asignados
+                Expanded(
+                  child: _buildMetricCard(
+                    title: 'Asignados Hoy',
+                    value: '${state.totalCount}',
+                    subtitle: '${state.pendingCount} pendientes',
+                    icon: Icons.inventory_2_outlined,
+                    iconColor: AppColors.info,
                   ),
-                  const SizedBox(width: 10),
-                  // Total Entregados
-                  Expanded(
-                    child: _buildMetricCard(
-                      title: 'Entregados',
-                      value: '${state.deliveredCount}',
-                      subtitle:
-                          '${state.totalCount > 0 ? ((state.deliveredCount / state.totalCount) * 100).toInt() : 0}% completado',
-                      icon: Icons.check_circle_outline_rounded,
-                      iconColor: AppColors.primary,
-                    ),
+                ),
+                const SizedBox(width: 10),
+                // Total Entregados
+                Expanded(
+                  child: _buildMetricCard(
+                    title: 'Entregados',
+                    value: '${state.deliveredCount}',
+                    subtitle:
+                        '${state.totalCount > 0 ? ((state.deliveredCount / state.totalCount) * 100).toInt() : 0}% completado',
+                    icon: Icons.check_circle_outline_rounded,
+                    iconColor: AppColors.primary,
                   ),
-                ],
-              ),
+                ),
+              ],
+            ),
 
-              const SizedBox(height: 10),
+            const SizedBox(height: 10),
 
-              // Métricas de Caja / Efectivo
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildMetricCard(
-                      title: 'Por Recaudar',
-                      value: _formatCop(state.totalCashToCollect),
-                      subtitle: 'Efectivo pendiente',
-                      icon: Icons.pending_actions_rounded,
-                      iconColor: AppColors.warning,
-                    ),
+            // Métricas de Caja / Efectivo
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMetricCard(
+                    title: 'Por Recaudar',
+                    value: _formatCop(state.totalCashToCollect),
+                    subtitle: 'Efectivo pendiente',
+                    icon: Icons.pending_actions_rounded,
+                    iconColor: AppColors.warning,
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: _buildMetricCard(
-                      title: 'Recaudado',
-                      value: _formatCop(state.totalCashCollected),
-                      subtitle: 'Efectivo en mano',
-                      icon: Icons.account_balance_wallet_outlined,
-                      iconColor: AppColors.primary,
-                    ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _buildMetricCard(
+                    title: 'Recaudado',
+                    value: _formatCop(state.totalCashCollected),
+                    subtitle: 'Efectivo en mano',
+                    icon: Icons.account_balance_wallet_outlined,
+                    iconColor: AppColors.primary,
                   ),
-                ],
-              ),
-            ],
+                ),
+              ],
+            ),
           ],
         ],
       ),
@@ -836,7 +805,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Cuando desde la PWA te asignen el enrutado del día, verás aquí tu resumen y listado de entregas.',
+              'Cuando desde la PWA te asignen el enrutado del día, podrás recibir el pedido y ver tu listado de entregas.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12.5,
@@ -849,12 +818,13 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
               height: 38,
               child: OutlinedButton.icon(
                 onPressed: () {
-                  context.read<OrdersCubit>().setRouteAssignment(true);
-                  _triggerShiftShimmerLoad();
+                  context
+                      .read<OrdersCubit>()
+                      .setRouteAssignment(true, received: false);
                 },
                 icon: const Icon(Icons.bolt_rounded, size: 17),
                 label: const Text(
-                  'Simular recepción de ruta (PWA)',
+                  'Simular asignación de ruta (PWA)',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -871,6 +841,229 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Vista cuando el domiciliario YA TIENE RUTA ASIGNADA desde la PWA,
+  /// pero debe pulsar "Recibir Pedido" y tomar la foto para ver la lista de entregas.
+  Widget _buildPendingRouteReceptionState(
+    BuildContext context,
+    OrdersState state,
+  ) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 40),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(22),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(color: AppColors.primaryBorder, width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Badge superior de Nueva Ruta Asignada
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.primarySoft,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.primaryBorder),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.local_shipping_outlined,
+                      size: 15,
+                      color: AppColors.primary,
+                    ),
+                    SizedBox(width: 6),
+                    Text(
+                      'RUTA ASIGNADA DESDE CENTRAL',
+                      style: TextStyle(
+                        color: AppColors.primary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // Código y Zona de la Ruta
+              Text(
+                'Ruta ${state.assignedRouteCode}',
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                state.assignedRouteZone,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // Resumen del cargue a recibir
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.background,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            '${state.totalCount}',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Pedidos',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: AppColors.border,
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            '${state.totalUnitsInRoute} un.',
+                            style: const TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Total Pulpas',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: AppColors.border,
+                    ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text(
+                            _formatCop(state.totalRouteAmount),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Valor Ruta',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              const Text(
+                'Verifica las canastillas de pulpa en planta y toma una foto de recepción para habilitar tu listado de pedidos.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  color: AppColors.textSecondary,
+                  height: 1.4,
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Botón principal: Recibir Pedido y Tomar Foto
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () => _handleOpenReceptionCamera(state),
+                  icon: const Icon(Icons.camera_alt_rounded, size: 20),
+                  label: const Text(
+                    'Recibir Pedido y Tomar Foto',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

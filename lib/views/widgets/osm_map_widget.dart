@@ -5,7 +5,7 @@ import '../../config/api_config.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
 
-/// Widget de mapa interactivo con el diseño de la PWA (Stadia Maps Alidade Smooth + Pines Enumerados)
+/// Widget de mapa interactivo con el diseño blanco minimalista de la PWA (OpenStreetMap White Smooth + Pines Enumerados)
 class OsmMapWidget extends StatefulWidget {
   final LatLng courierLocation;
   final LatLng destinationLocation;
@@ -56,7 +56,16 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     with TickerProviderStateMixin {
   late final MapController _mapController;
   AnimationController? _cameraAnimController;
-  final MapStyleOption _selectedStyle = ApiConfig.mapStyles.first; // Stadia Smooth Retina fijo
+  final MapStyleOption _selectedStyle = ApiConfig.mapStyles.first; // OpenStreetMap White Smooth fijo
+
+  // Matriz de color de alto brillo y escala de grises suave (Estilo Positron / Alidade White Smooth)
+  // Convierte los tiles oficiales de OpenStreetMap en un mapa blanco minimalista sin requerir API Key
+  static const ColorFilter _whiteSmoothTileFilter = ColorFilter.matrix(<double>[
+    0.32, 0.52, 0.08, 0.0, 22.0,
+    0.32, 0.53, 0.08, 0.0, 23.0,
+    0.32, 0.53, 0.10, 0.0, 25.0,
+    0.0,  0.0,  0.0,  1.0,  0.0,
+  ]);
   bool _hasAutoFitted = false;
   bool _isMapReady = false;
 
@@ -332,11 +341,18 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             },
           ),
           children: [
-            // 1. Capa Cartográfica de la PWA (Stadia Maps Alidade Smooth Retina)
+            // 1. Capa Cartográfica Blanca Minimalista 100% Gratuita (OpenStreetMap White Smooth sin API Key)
             TileLayer(
               urlTemplate: _selectedStyle.url,
               userAgentPackageName: ApiConfig.userAgentPackageName,
+              maxNativeZoom: 19,
               maxZoom: _selectedStyle.maxZoom,
+              tileBuilder: (context, tileWidget, tile) {
+                return ColorFiltered(
+                  colorFilter: _whiteSmoothTileFilter,
+                  child: tileWidget,
+                );
+              },
             ),
 
             // 2. Polilíneas de Enrutamiento Vial Calle por Calle (Estilo PWA)
@@ -449,7 +465,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
           ),
         ),
 
-        // Badge de atribución cartográfica Stadia / OSM
+        // Badge de atribución cartográfica OpenStreetMap
         Positioned(
           left: 10,
           bottom: 6,
@@ -461,7 +477,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
               border: Border.all(color: AppColors.border),
             ),
             child: Text(
-              '© Stadia Maps • OpenStreetMap',
+              '© OpenStreetMap',
               style: TextStyle(
                 color: AppColors.textSecondary.withValues(alpha: 0.9),
                 fontSize: 8.5,

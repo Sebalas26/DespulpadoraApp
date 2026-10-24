@@ -32,39 +32,33 @@ class ApiConfig {
   static const double plantaMatrizLat = 4.7125;
   static const double plantaMatrizLng = -74.1420;
 
-  // Stadia Maps Vector Retina & Estilos Cartográficos de la PWA
-  static const String stadiaApiKey = '28312715-2030-4d54-ad98-458156a468d2';
-
-  static const String stadiaSmoothTileUrl =
-      'https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}@2x.png?api_key=$stadiaApiKey';
-  static const String stadiaDarkTileUrl =
-      'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}@2x.png?api_key=$stadiaApiKey';
-  static const String esriGrayTileUrl =
-      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+  // OpenStreetMap White Smooth 100% Gratuito sin API Key ni marcas de agua (Igual a la PWA)
   static const String osmStandardTileUrl =
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  static const String esriGrayTileUrl =
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
 
-  // Tile Server por defecto: Stadia Maps Alidade Smooth (idéntico a la PWA)
-  static const String osmTileUrl = stadiaSmoothTileUrl;
+  // Tile Server por defecto: OpenStreetMap White Smooth (100% gratis, sin API Key)
+  static const String osmTileUrl = osmStandardTileUrl;
   static const String userAgentPackageName = 'com.pulpaspro.despulpadora_app';
 
   // Catálogo de estilos de mapa idéntico a la PWA
   static const List<MapStyleOption> mapStyles = [
     MapStyleOption(
-      id: 'stadia-smooth',
-      name: 'Stadia Maps Alidade Smooth',
-      shortName: 'Stadia Smooth',
-      badge: 'VECTOR RETINA',
-      url: stadiaSmoothTileUrl,
+      id: 'osm-white',
+      name: 'OpenStreetMap White Smooth',
+      shortName: 'White Smooth',
+      badge: '100% GRATIS',
+      url: osmStandardTileUrl,
       maxZoom: 20,
       isDark: false,
     ),
     MapStyleOption(
-      id: 'stadia-dark',
-      name: 'Stadia Maps Alidade Smooth Dark',
-      shortName: 'Stadia Dark',
+      id: 'osm-dark',
+      name: 'OpenStreetMap Dark Smooth',
+      shortName: 'Dark Smooth',
       badge: 'MODO NOCHE',
-      url: stadiaDarkTileUrl,
+      url: osmStandardTileUrl,
       maxZoom: 20,
       isDark: true,
     ),

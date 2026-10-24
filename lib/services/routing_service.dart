@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
-import '../config/api_config.dart';
 import 'location_service.dart';
 
 /// Información de un tramo o ruta por carreteras reales
@@ -62,7 +61,7 @@ class MultiStopRouteData {
   }
 }
 
-/// Servicio de enrutamiento vehicular exacto calle por calle (Stadia Maps Valhalla + OSRM + OSM.de)
+/// Servicio de enrutamiento vehicular exacto calle por calle (Valhalla OSM + OSRM + OSM.de)
 class RoutingService {
   final http.Client _client;
   static final Map<String, RouteData> _segmentCache = {};
@@ -98,11 +97,11 @@ class RoutingService {
       return cached;
     }
 
-    // 1. Motor Primario: Stadia Maps Valhalla Routing API (Alta disponibilidad con API Key de la PWA)
-    final stadiaRoute = await _fetchStadiaValhallaSingleRoute(safeStart, safeEnd);
-    if (stadiaRoute != null && stadiaRoute.points.length > 2) {
-      _segmentCache[cacheKey] = stadiaRoute;
-      return stadiaRoute;
+    // 1. Motor Primario: Valhalla OpenStreetMap Routing API (100% gratuito sin API Key)
+    final valhallaRoute = await _fetchValhallaSingleRoute(safeStart, safeEnd);
+    if (valhallaRoute != null && valhallaRoute.points.length > 2) {
+      _segmentCache[cacheKey] = valhallaRoute;
+      return valhallaRoute;
     }
 
     // 2. Motor Secundario: OSRM Oficial (router.project-osrm.org)
@@ -153,10 +152,10 @@ class RoutingService {
       );
     }
 
-    // 1. Intentar obtener todo el circuito multiparada en una sola petición a Stadia Maps Valhalla
-    final stadiaMulti = await _fetchStadiaValhallaMultiRoute(safeWaypoints);
-    if (stadiaMulti != null && stadiaMulti.fullPoints.length > 5) {
-      return stadiaMulti;
+    // 1. Intentar obtener todo el circuito multiparada en una sola petición a Valhalla OpenStreetMap
+    final valhallaMulti = await _fetchValhallaMultiRoute(safeWaypoints);
+    if (valhallaMulti != null && valhallaMulti.fullPoints.length > 5) {
+      return valhallaMulti;
     }
 
     // 2. Intentar obtener todo el circuito multiparada en una sola petición a OSRM / OSM.de
@@ -209,11 +208,11 @@ class RoutingService {
     );
   }
 
-  /// Consulta Stadia Maps Valhalla para un tramo individual calle por calle
-  Future<RouteData?> _fetchStadiaValhallaSingleRoute(LatLng start, LatLng end) async {
+  /// Consulta Valhalla OpenStreetMap gratuito para un tramo individual calle por calle
+  Future<RouteData?> _fetchValhallaSingleRoute(LatLng start, LatLng end) async {
     try {
       final url = Uri.parse(
-        'https://api.stadiamaps.com/route/v1?api_key=${ApiConfig.stadiaApiKey}',
+        'https://valhalla1.openstreetmap.de/route',
       );
       final body = jsonEncode({
         'locations': [
@@ -256,13 +255,13 @@ class RoutingService {
     return null;
   }
 
-  /// Consulta Stadia Maps Valhalla para todo el circuito multiparada en una sola petición
-  Future<MultiStopRouteData?> _fetchStadiaValhallaMultiRoute(
+  /// Consulta Valhalla OpenStreetMap gratuito para todo el circuito multiparada en una sola petición
+  Future<MultiStopRouteData?> _fetchValhallaMultiRoute(
     List<LatLng> waypoints,
   ) async {
     try {
       final url = Uri.parse(
-        'https://api.stadiamaps.com/route/v1?api_key=${ApiConfig.stadiaApiKey}',
+        'https://valhalla1.openstreetmap.de/route',
       );
       final body = jsonEncode({
         'locations': waypoints

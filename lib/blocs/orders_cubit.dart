@@ -13,6 +13,8 @@ class OrdersState {
   final String? activeOrderId;
   final bool isRouteActive;
   final bool hasAssignedRoute;
+  final bool isRouteReceived;
+  final String? receptionPhotoTime;
   final String assignedRouteCode;
   final String assignedRouteZone;
   final String? errorMessage;
@@ -24,6 +26,8 @@ class OrdersState {
     this.activeOrderId,
     this.isRouteActive = false,
     this.hasAssignedRoute = false,
+    this.isRouteReceived = false,
+    this.receptionPhotoTime,
     this.assignedRouteCode = 'RUT-2026-01',
     this.assignedRouteZone = 'Chapinero • Zona Norte',
     this.errorMessage,
@@ -31,6 +35,12 @@ class OrdersState {
 
   // Métricas para el Dashboard
   int get totalCount => orders.length;
+
+  int get totalUnitsInRoute =>
+      orders.fold(0, (sum, o) => sum + o.totalUnidades);
+
+  double get totalRouteAmount =>
+      orders.fold(0.0, (sum, o) => sum + o.montoTotal);
 
   int get deliveredCount =>
       orders.where((o) => o.estado == OrderStatus.entregado).length;
@@ -111,6 +121,8 @@ class OrdersState {
     String? activeOrderId,
     bool? isRouteActive,
     bool? hasAssignedRoute,
+    bool? isRouteReceived,
+    String? receptionPhotoTime,
     String? assignedRouteCode,
     String? assignedRouteZone,
     String? errorMessage,
@@ -122,6 +134,8 @@ class OrdersState {
       activeOrderId: activeOrderId ?? this.activeOrderId,
       isRouteActive: isRouteActive ?? this.isRouteActive,
       hasAssignedRoute: hasAssignedRoute ?? this.hasAssignedRoute,
+      isRouteReceived: isRouteReceived ?? this.isRouteReceived,
+      receptionPhotoTime: receptionPhotoTime ?? this.receptionPhotoTime,
       assignedRouteCode: assignedRouteCode ?? this.assignedRouteCode,
       assignedRouteZone: assignedRouteZone ?? this.assignedRouteZone,
       errorMessage: errorMessage ?? this.errorMessage,
@@ -183,13 +197,25 @@ class OrdersCubit extends Cubit<OrdersState> {
   /// Activa o desactiva la asignación de ruta enviada desde la PWA
   void setRouteAssignment(
     bool assigned, {
+    bool received = false,
     String? routeCode,
     String? routeZone,
   }) {
     emit(state.copyWith(
       hasAssignedRoute: assigned,
+      isRouteReceived: assigned ? received : false,
+      isRouteActive: assigned ? state.isRouteActive : false,
       assignedRouteCode: routeCode ?? state.assignedRouteCode,
       assignedRouteZone: routeZone ?? state.assignedRouteZone,
+    ));
+  }
+
+  /// Confirma la recepción física del pedido de la ruta con evidencia fotográfica
+  void confirmRouteReception({required String photoTimestamp}) {
+    emit(state.copyWith(
+      hasAssignedRoute: true,
+      isRouteReceived: true,
+      receptionPhotoTime: photoTimestamp,
     ));
   }
 
