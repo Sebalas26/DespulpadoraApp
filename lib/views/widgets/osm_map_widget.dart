@@ -56,16 +56,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     with TickerProviderStateMixin {
   late final MapController _mapController;
   AnimationController? _cameraAnimController;
-  final MapStyleOption _selectedStyle = ApiConfig.mapStyles.first; // OpenStreetMap White Smooth fijo
-
-  // Matriz de color de alto brillo y escala de grises suave (Estilo Positron / Alidade White Smooth)
-  // Convierte los tiles oficiales de OpenStreetMap en un mapa blanco minimalista sin requerir API Key
-  static const ColorFilter _whiteSmoothTileFilter = ColorFilter.matrix(<double>[
-    0.32, 0.52, 0.08, 0.0, 22.0,
-    0.32, 0.53, 0.08, 0.0, 23.0,
-    0.32, 0.53, 0.10, 0.0, 25.0,
-    0.0,  0.0,  0.0,  1.0,  0.0,
-  ]);
+  final MapStyleOption _selectedStyle = ApiConfig.mapStyles.first; // ArcGIS White Minimalist fijo
   bool _hasAutoFitted = false;
   bool _isMapReady = false;
 
@@ -341,18 +332,12 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             },
           ),
           children: [
-            // 1. Capa Cartográfica Blanca Minimalista 100% Gratuita (OpenStreetMap White Smooth sin API Key)
+            // 1. Capa Cartográfica Blanca Minimalista 100% Gratuita (ArcGIS White Minimalist sin API Key ni cuenta)
             TileLayer(
               urlTemplate: _selectedStyle.url,
               userAgentPackageName: ApiConfig.userAgentPackageName,
               maxNativeZoom: 19,
               maxZoom: _selectedStyle.maxZoom,
-              tileBuilder: (context, tileWidget, tile) {
-                return ColorFiltered(
-                  colorFilter: _whiteSmoothTileFilter,
-                  child: tileWidget,
-                );
-              },
             ),
 
             // 2. Polilíneas de Enrutamiento Vial Calle por Calle (Estilo PWA)
@@ -477,7 +462,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
               border: Border.all(color: AppColors.border),
             ),
             child: Text(
-              '© OpenStreetMap',
+              '© Esri ArcGIS • OpenStreetMap',
               style: TextStyle(
                 color: AppColors.textSecondary.withValues(alpha: 0.9),
                 fontSize: 8.5,

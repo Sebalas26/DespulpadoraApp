@@ -32,35 +32,28 @@ class ApiConfig {
   static const double plantaMatrizLat = 4.7125;
   static const double plantaMatrizLng = -74.1420;
 
-  // OpenStreetMap White Smooth 100% Gratuito sin API Key ni marcas de agua (Igual a la PWA)
-  static const String osmStandardTileUrl =
-      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+  // ArcGIS World Topographic White Minimalist (100% Gratuito, sin cuenta ni API Key, limpio desde zoom 1 hasta 19)
+  static const String arcgisWhiteMinimalTileUrl =
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
   static const String esriGrayTileUrl =
       'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+  static const String osmStandardTileUrl =
+      'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-  // Tile Server por defecto: OpenStreetMap White Smooth (100% gratis, sin API Key)
-  static const String osmTileUrl = osmStandardTileUrl;
+  // Tile Server por defecto: ArcGIS White Minimalist (100% gratis, sin cuenta ni API Key)
+  static const String osmTileUrl = arcgisWhiteMinimalTileUrl;
   static const String userAgentPackageName = 'com.pulpaspro.despulpadora_app';
 
   // Catálogo de estilos de mapa idéntico a la PWA
   static const List<MapStyleOption> mapStyles = [
     MapStyleOption(
-      id: 'osm-white',
-      name: 'OpenStreetMap White Smooth',
-      shortName: 'White Smooth',
+      id: 'arcgis-white',
+      name: 'ArcGIS White Minimalist',
+      shortName: 'ArcGIS White',
       badge: '100% GRATIS',
-      url: osmStandardTileUrl,
-      maxZoom: 20,
+      url: arcgisWhiteMinimalTileUrl,
+      maxZoom: 19,
       isDark: false,
-    ),
-    MapStyleOption(
-      id: 'osm-dark',
-      name: 'OpenStreetMap Dark Smooth',
-      shortName: 'Dark Smooth',
-      badge: 'MODO NOCHE',
-      url: osmStandardTileUrl,
-      maxZoom: 20,
-      isDark: true,
     ),
     MapStyleOption(
       id: 'esri-gray',
