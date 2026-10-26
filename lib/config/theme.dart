@@ -1,46 +1,87 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// Paleta de colores e identidad visual de DGL / PulpasPro (Sincronizada con PWA)
+/// Paleta de colores corporativa e identidad visual de DGL Despulpadora.
 class AppColors {
-  // Primarios DGL Forest Green (--color-primary en PWA)
-  static const Color primary = Color(0xFF1E5E3A);       // Forest Green principal
-  static const Color primaryDark = Color(0xFF164A2D);   // Forest Green hover/dark
-  static const Color primaryLight = Color(0xFF1E5E3A);  // Acento verde legible sobre fondo claro
-  static const Color primarySoft = Color(0xFFEAF5EE);   // --color-primary-light
-  static const Color primaryBorder = Color(0xFFD1E7D8); // --color-primary-border
-  static const Color primaryGlow = Color(0x261E5E3A);   // Sombra / resplandor suave
+  /// Color verde bosque principal de la marca.
+  static const Color primary = Color(0xFF1E5E3A);
 
-  // Fondos y Superficies (DGL Clean Light Aesthetic)
-  static const Color background = Color(0xFFF6F8F7);      // --bg-app
-  static const Color surface = Color(0xFFFFFFFF);         // --bg-card
-  static const Color surfaceElevated = Color(0xFFF1F5F2); // --bg-hover / --bg-subtle
-  static const Color border = Color(0xFFEEF2EF);          // --border-subtle
-  static const Color borderHighlight = Color(0xFFE2E8F0); // --border-highlight
+  /// Variación oscura del color primario para estados activos.
+  static const Color primaryDark = Color(0xFF164A2D);
 
-  // Textos (--text-main, --text-muted, --text-dim)
-  static const Color textPrimary = Color(0xFF111827);   // Gris carbón profundo
-  static const Color textSecondary = Color(0xFF6B7280); // Gris medio
-  static const Color textMuted = Color(0xFF9CA3AF);     // Gris suave
+  /// Acento verde legible sobre superficies claras.
+  static const Color primaryLight = Color(0xFF1E5E3A);
 
-  // Estados de Entrega (Sincronizados con badges de PWA)
-  static const Color statusAsignado = Color(0xFF2563EB);  // Blue 600 (--status-info)
-  static const Color statusEnCamino = Color(0xFFD97706);  // Amber 600 (--status-warning)
-  static const Color statusEnPunto = Color(0xFF7C3AED);   // Purple 600 (--color-purple-text)
-  static const Color statusEntregado = Color(0xFF1E5E3A); // DGL Forest Green (--status-success)
-  static const Color statusNovedad = Color(0xFFDC2626);   // Red 600 (--status-danger)
+  /// Fondo verde suave para contenedores destacados.
+  static const Color primarySoft = Color(0xFFEAF5EE);
 
-  // Acciones y Alertas
+  /// Borde verde suave para tarjetas y etiquetas activas.
+  static const Color primaryBorder = Color(0xFFD1E7D8);
+
+  /// Resplandor translúcido del color primario.
+  static const Color primaryGlow = Color(0x261E5E3A);
+
+  /// Color de fondo general de la aplicación.
+  static const Color background = Color(0xFFF6F8F7);
+
+  /// Color de superficie para tarjetas y modales.
+  static const Color surface = Color(0xFFFFFFFF);
+
+  /// Color de superficie elevada o secundaria.
+  static const Color surfaceElevated = Color(0xFFF1F5F2);
+
+  /// Color de borde sutil para divisores y contenedores.
+  static const Color border = Color(0xFFEEF2EF);
+
+  /// Color de borde resaltado para controles interactivos.
+  static const Color borderHighlight = Color(0xFFE2E8F0);
+
+  /// Color de texto principal de alto contraste.
+  static const Color textPrimary = Color(0xFF111827);
+
+  /// Color de texto secundario para subtítulos.
+  static const Color textSecondary = Color(0xFF6B7280);
+
+  /// Color de texto atenuado para pistas y metadatos.
+  static const Color textMuted = Color(0xFF9CA3AF);
+
+  /// Color identificador del estado Asignado.
+  static const Color statusAsignado = Color(0xFF2563EB);
+
+  /// Color identificador del estado En Camino.
+  static const Color statusEnCamino = Color(0xFFD97706);
+
+  /// Color identificador del estado En el Punto.
+  static const Color statusEnPunto = Color(0xFF7C3AED);
+
+  /// Color identificador del estado Entregado.
+  static const Color statusEntregado = Color(0xFF1E5E3A);
+
+  /// Color identificador del estado Novedad.
+  static const Color statusNovedad = Color(0xFFDC2626);
+
+  /// Color semántico de éxito.
   static const Color success = Color(0xFF1E5E3A);
+
+  /// Color semántico de advertencia.
   static const Color warning = Color(0xFFD97706);
+
+  /// Color semántico de error o peligro.
   static const Color error = Color(0xFFDC2626);
+
+  /// Color semántico informativo.
   static const Color info = Color(0xFF2563EB);
+
+  /// Color oficial para acciones de WhatsApp.
   static const Color whatsapp = Color(0xFF25D366);
+
+  /// Color para integración con navegación Waze.
   static const Color waze = Color(0xFF059669);
 }
 
-/// Definición del tema visual de la aplicación (Estilo DGL Light igual a la PWA)
+/// Definición del tema visual Material 3 de la aplicación.
 class AppTheme {
+  /// Construye y retorna el tema claro corporativo.
   static ThemeData get lightTheme {
     final baseTextTheme = ThemeData.light().textTheme;
     final textTheme = GoogleFonts.latoTextTheme(baseTextTheme).copyWith(
@@ -174,7 +215,10 @@ class AppTheme {
       ),
       snackBarTheme: SnackBarThemeData(
         backgroundColor: AppColors.textPrimary,
-        contentTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+        contentTextStyle: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w500,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
@@ -187,6 +231,6 @@ class AppTheme {
     );
   }
 
-  /// Alias para mantener compatibilidad con referencias existentes
+  /// Alias de compatibilidad que retorna el tema visual principal.
   static ThemeData get darkTheme => lightTheme;
 }

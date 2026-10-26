@@ -5,30 +5,61 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 import '../config/api_config.dart';
 import '../models/location_data_model.dart';
 
-/// Estado de la conexión WebSocket
-enum WsConnectionStatus { disconnected, connecting, connected }
+/// Estados posibles de la conexión con el servidor WebSocket.
+enum WsConnectionStatus {
+  /// Canal desconectado o cerrado.
+  disconnected,
 
-/// Servicio para la transmisión de telemetría GPS en vivo vía WebSockets
+  /// Intentando establecer conexión con el servidor.
+  connecting,
+
+  /// Canal conectado y listo para transmitir telemetría.
+  connected,
+}
+
+/// Servicio para la transmisión bidireccional de telemetría GPS en tiempo real vía WebSockets.
 class WebSocketService {
+  /// Canal de comunicación WebSocket activo.
   WebSocketChannel? _channel;
+
+  /// Temporizador de reconexión automática ante caídas de red.
   Timer? _reconnectTimer;
+
+  /// Temporizador de latido (`ping`) para mantener viva la conexión.
   Timer? _pingTimer;
+
+  /// Indica si la desconexión fue solicitada explícitamente por el usuario.
   bool _isManualDisconnect = false;
 
-  final _connectionStatusController = StreamController<WsConnectionStatus>.broadcast();
-  Stream<WsConnectionStatus> get connectionStatusStream => _connectionStatusController.stream;
+  /// Controlador de flujo para emitir cambios en el estado de conexión.
+  final _connectionStatusController =
+      StreamController<WsConnectionStatus>.broadcast();
+
+  /// Flujo reactivo del estado de conexión WebSocket.
+  Stream<WsConnectionStatus> get connectionStatusStream =>
+      _connectionStatusController.stream;
+
+  /// Estado actual de la conexión WebSocket.
   WsConnectionStatus _currentStatus = WsConnectionStatus.disconnected;
+
+  /// Obtiene el estado actual de la conexión WebSocket.
   WsConnectionStatus get currentStatus => _currentStatus;
 
-  final _incomingMessagesController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get incomingMessagesStream => _incomingMessagesController.stream;
+  /// Controlador de flujo para mensajes JSON entrantes desde el servidor.
+  final _incomingMessagesController =
+      StreamController<Map<String, dynamic>>.broadcast();
 
-  /// Inicia la conexión con el servidor WebSocket
+  /// Flujo reactivo de mensajes entrantes desde el servidor WebSocket.
+  Stream<Map<String, dynamic>> get incomingMessagesStream =>
+      _incomingMessagesController.stream;
+
+  /// Inicia la conexión con el servidor WebSocket configurado en [ApiConfig.wsUrl].
   void connect() {
     _isManualDisconnect = false;
     _establishConnection();
   }
 
+  /// Actualiza el estado interno y notifica a los suscriptores del flujo.
   void _updateStatus(WsConnectionStatus status) {
     _currentStatus = status;
     if (!_connectionStatusController.isClosed) {
@@ -36,6 +67,7 @@ class WebSocketService {
     }
   }
 
+  /// Establece el canal WebSocket y configura los manejadores de eventos y errores.
   void _establishConnection() {
     if (_isManualDisconnect) return;
     if (_currentStatus == WsConnectionStatus.connected) return;
@@ -94,21 +126,29 @@ class WebSocketService {
     }
   }
 
+  /// Inicia el envío periódico de paquetes `ping` para preservar la sesión activa.
   void _startPingHeartbeat() {
     _pingTimer?.cancel();
     _pingTimer = Timer.periodic(const Duration(seconds: 25), (_) {
       if (_currentStatus == WsConnectionStatus.connected) {
-        sendEvent('ping', {'timestamp': DateTime.now().toUtc().toIso8601String()});
+        sendEvent(
+          'ping',
+          {'timestamp': DateTime.now().toUtc().toIso8601String()},
+        );
       }
     });
   }
 
+  /// Gestiona la caída de conexión programando un reintento automático si procede.
   void _handleDisconnection() {
     _pingTimer?.cancel();
     _updateStatus(WsConnectionStatus.disconnected);
 
     if (!_isManualDisconnect) {
-      dev.log('[WebSocket] Reintentando conexión en 5 segundos...', name: 'PulpasProWS');
+      dev.log(
+        '[WebSocket] Reintentando conexión en 5 segundos...',
+        name: 'PulpasProWS',
+      );
       _reconnectTimer?.cancel();
       _reconnectTimer = Timer(const Duration(seconds: 5), () {
         _establishConnection();
@@ -116,7 +156,7 @@ class WebSocketService {
     }
   }
 
-  /// Envía un evento genérico en formato JSON
+  /// Envía un evento con nombre y carga de datos en formato JSON a través del WebSocket.
   bool sendEvent(String eventName, Map<String, dynamic> data) {
     final payload = {
       'event': eventName,
@@ -125,12 +165,12 @@ class WebSocketService {
     return sendRawJson(payload);
   }
 
-  /// Envía la telemetría GPS del mensajero en el formato solicitado
+  /// Envía una actualización de ubicación del domiciliario utilizando el contrato de evento WebSocket.
   bool sendLocationUpdate(CourierLocationPayload payload) {
     return sendRawJson(payload.toWebSocketEvent());
   }
 
-  /// Serializa y envía un mapa JSON por el canal
+  /// Serializa y transmite un mapa JSON por el canal WebSocket activo.
   bool sendRawJson(Map<String, dynamic> jsonMap) {
     if (_channel != null) {
       try {
@@ -147,17 +187,20 @@ class WebSocketService {
     return false;
   }
 
-  /// Desconecta manualmente el socket (ej. al salir de turno o cerrar sesión)
+  /// Cierra manualmente la conexión WebSocket y detiene los temporizadores de reconexión.
   void disconnect() {
     _isManualDisconnect = true;
     _reconnectTimer?.cancel();
     _pingTimer?.cancel();
-    _channel?.sink.close();
+    try {
+      _channel?.sink.close();
+    } catch (_) {}
     _channel = null;
     _updateStatus(WsConnectionStatus.disconnected);
     dev.log('[WebSocket] Desconectado por el usuario', name: 'PulpasProWS');
   }
 
+  /// Libera todos los flujos y recursos del servicio WebSocket.
   void dispose() {
     disconnect();
     _connectionStatusController.close();

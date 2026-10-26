@@ -3,17 +3,22 @@ import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
 
-/// Diálogo modal que muestra el listado detallado de las pulpas de un pedido
+/// Diálogo modal que presenta el desglose detallado de productos y unidades de un pedido.
 class OrderItemsDialog extends StatelessWidget {
+  /// Pedido cuyos productos se visualizan.
   final OrderModel order;
+
+  /// Número de secuencia de la parada dentro de la ruta.
   final int? stopNumber;
 
+  /// Crea una nueva instancia de [OrderItemsDialog].
   const OrderItemsDialog({
     super.key,
     required this.order,
     this.stopNumber,
   });
 
+  /// Muestra el diálogo modal de ítems del pedido en el contexto actual.
   static void show(
     BuildContext context, {
     required OrderModel order,
@@ -28,6 +33,7 @@ class OrderItemsDialog extends StatelessWidget {
     );
   }
 
+  /// Formatea un valor numérico en moneda colombiana (COP).
   String _formatCop(double value) {
     final fmt = NumberFormat.currency(
       locale: 'es_CO',
@@ -56,7 +62,6 @@ class OrderItemsDialog extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Cabecera del Diálogo
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -158,12 +163,9 @@ class OrderItemsDialog extends StatelessWidget {
                   ),
                 ],
               ),
-
               const SizedBox(height: 12),
               const Divider(height: 1),
               const SizedBox(height: 12),
-
-              // Resumen de Cantidades y Total
               Container(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
@@ -206,7 +208,6 @@ class OrderItemsDialog extends StatelessWidget {
                   ],
                 ),
               ),
-
               if (order.notasEntrega?.isNotEmpty == true) ...[
                 const SizedBox(height: 10),
                 Container(
@@ -239,9 +240,7 @@ class OrderItemsDialog extends StatelessWidget {
                   ),
                 ),
               ],
-
               const SizedBox(height: 14),
-
               const Text(
                 'Listado de Pulpas en el Pedido',
                 style: TextStyle(
@@ -251,8 +250,6 @@ class OrderItemsDialog extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-
-              // Lista de items de pulpa
               Flexible(
                 child: ListView.separated(
                   shrinkWrap: true,
@@ -330,10 +327,7 @@ class OrderItemsDialog extends StatelessWidget {
                   },
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // Botón Cerrar
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -353,4 +347,3 @@ class OrderItemsDialog extends StatelessWidget {
     );
   }
 }
-

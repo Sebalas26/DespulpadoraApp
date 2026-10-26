@@ -4,24 +4,31 @@ import '../../config/theme.dart';
 import '../../models/order_model.dart';
 import 'order_items_dialog.dart';
 
-/// Tarjeta informativa para la lista de pedidos en el Dashboard (Sincronizada con diseño PWA)
-/// No es clickeable en su totalidad; únicamente el botón verde de productos abre el diálogo de pulpas.
+/// Tarjeta informativa de un pedido dentro del listado del panel principal.
 class OrderCardWidget extends StatelessWidget {
+  /// Modelo de datos del pedido a representar.
   final OrderModel order;
+
+  /// Número de parada secuencial dentro de la ruta.
   final int? stopNumber;
 
+  /// Crea una nueva instancia de [OrderCardWidget].
   const OrderCardWidget({
     super.key,
     required this.order,
     this.stopNumber,
   });
 
+  /// Inicia una llamada telefónica hacia el número del cliente.
   Future<void> _makeCall(String phone) async {
-    final cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
-    final uri = Uri.parse('tel:$cleanPhone');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+    try {
+      final cleanPhone = phone.replaceAll(RegExp(r'\s+'), '');
+      if (cleanPhone.isEmpty) return;
+      final uri = Uri.parse('tel:$cleanPhone');
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (_) {}
   }
 
   @override
@@ -56,7 +63,6 @@ class OrderCardWidget extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabecera: Número de Parada + Badge Amarillo ID de Pedido + Estado
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -118,10 +124,7 @@ class OrderCardWidget extends StatelessWidget {
                 _buildStatusBadge(order),
               ],
             ),
-
             const SizedBox(height: 12),
-
-            // Cliente
             Row(
               children: [
                 const Icon(
@@ -154,10 +157,7 @@ class OrderCardWidget extends StatelessWidget {
                   ),
               ],
             ),
-
             const SizedBox(height: 4),
-
-            // Dirección y Barrio
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -179,12 +179,9 @@ class OrderCardWidget extends StatelessWidget {
                 ),
               ],
             ),
-
             const SizedBox(height: 10),
             const Divider(height: 1),
             const SizedBox(height: 10),
-
-            // Pie: Monto + Método de Pago + Botón Verde Clickeable para abrir Dialog de Pulpas
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -273,6 +270,7 @@ class OrderCardWidget extends StatelessWidget {
     );
   }
 
+  /// Construye la etiqueta de estado con el color semántico correspondiente.
   Widget _buildStatusBadge(OrderModel order) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),

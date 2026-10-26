@@ -3,21 +3,23 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
-/// Servicio para obtener coordenadas GPS, calcular distancias y nivel de batería
+/// Servicio para obtener coordenadas GPS del dispositivo, calcular distancias y consultar el nivel de batería.
 class LocationService {
+  /// Instancia del lector de estado de batería del dispositivo.
   final Battery _battery = Battery();
+
+  /// Suscripción opcional al flujo continuo de ubicación.
   StreamSubscription<Position>? _positionSubscription;
 
-  /// Coordenada inicial por defecto en Bogotá (Sector Calle 80 / Av. Boyacá - Salida Cava)
+  /// Coordenada de referencia inicial cuando el dispositivo aún no reporta señal dentro del territorio nacional.
   static const LatLng defaultLocation = LatLng(4.69680, -74.09250);
 
-  /// Verifica si una coordenada GPS está dentro de Colombia (evita que el emulador Android/iOS
-  /// envíe la coordenada por defecto de California 37.42, -122.084 que rompe el enrutamiento vial)
+  /// Verifica si una coordenada GPS se encuentra dentro de los límites geográficos de Colombia.
   static bool isWithinColombia(double lat, double lng) {
     return lat >= -4.5 && lat <= 13.5 && lng >= -80.0 && lng <= -66.5;
   }
 
-  /// Normaliza una posición para garantizar que en emuladores fuera de Colombia use Bogotá
+  /// Normaliza una posición GPS garantizando coordenadas válidas dentro del área operativa.
   Position _normalizePositionForBogota(Position pos) {
     if (isWithinColombia(pos.latitude, pos.longitude)) {
       return pos;
@@ -31,11 +33,12 @@ class LocationService {
       accuracy: 5.0,
       heading: pos.heading,
       headingAccuracy: 5.0,
-      speed: pos.speed > 0 ? pos.speed : 7.5,
+      speed: pos.speed > 0 ? pos.speed : 0.0,
       speedAccuracy: 1.0,
     );
   }
 
+  /// Construye un objeto [Position] con la ubicación de referencia inicial.
   Position _buildDefaultBogotaPosition() {
     return Position(
       latitude: defaultLocation.latitude,
@@ -44,40 +47,40 @@ class LocationService {
       altitude: 2600.0,
       altitudeAccuracy: 5.0,
       accuracy: 5.0,
-      heading: 180.0,
+      heading: 0.0,
       headingAccuracy: 5.0,
-      speed: 7.5,
+      speed: 0.0,
       speedAccuracy: 1.0,
     );
   }
 
-  /// Verifica y solicita permisos de ubicación
+  /// Verifica y solicita los permisos de localización del sistema operativo.
   Future<bool> checkAndRequestPermissions() async {
-    bool serviceEnabled;
-    LocationPermission permission;
-
-    // Verificar si el GPS está habilitado en el dispositivo
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      return false;
-    }
-
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
+    try {
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
         return false;
       }
-    }
 
-    if (permission == LocationPermission.deniedForever) {
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          return false;
+        }
+      }
+
+      if (permission == LocationPermission.deniedForever) {
+        return false;
+      }
+
+      return true;
+    } catch (_) {
       return false;
     }
-
-    return true;
   }
 
-  /// Obtiene la posición actual inmediata del dispositivo (normalizada a Bogotá si es emulador en USA)
+  /// Obtiene la posición GPS actual del dispositivo.
   Future<Position?> getCurrentPosition() async {
     try {
       final hasPermission = await checkAndRequestPermissions();
@@ -92,16 +95,16 @@ class LocationService {
         ),
       );
       return _normalizePositionForBogota(pos);
-    } catch (e) {
+    } catch (_) {
       return _buildDefaultBogotaPosition();
     }
   }
 
-  /// Inicia el stream continuo de ubicación
+  /// Retorna un flujo continuo de actualizaciones de posición GPS.
   Stream<Position> getPositionStream({int intervalSeconds = 5}) {
     const locationSettings = LocationSettings(
       accuracy: LocationAccuracy.high,
-      distanceFilter: 5, // Cada 5 metros o por tiempo
+      distanceFilter: 5,
     );
 
     return Geolocator.getPositionStream(
@@ -109,16 +112,16 @@ class LocationService {
     ).map(_normalizePositionForBogota);
   }
 
-  /// Obtiene el porcentaje de batería del dispositivo de forma segura
+  /// Consulta el porcentaje actual de batería del dispositivo de manera segura.
   Future<int> getBatteryLevel() async {
     try {
       return await _battery.batteryLevel;
-    } catch (e) {
-      return 85; // Fallback razonable si el emulador no soporta lectura
+    } catch (_) {
+      return 100;
     }
   }
 
-  /// Calcula la distancia en metros o kilómetros entre dos coordenadas
+  /// Calcula la distancia en metros entre dos coordenadas geográficas.
   double calculateDistanceInMeters(LatLng start, LatLng end) {
     return Geolocator.distanceBetween(
       start.latitude,
@@ -128,7 +131,7 @@ class LocationService {
     );
   }
 
-  /// Formatea la distancia para la UI (ej. "450 m" o "3.2 km")
+  /// Formatea una distancia en metros a una cadena legible en metros o kilómetros.
   String formatDistance(double meters) {
     if (meters < 1000) {
       return '${meters.toInt()} m';
@@ -137,14 +140,15 @@ class LocationService {
     }
   }
 
-  /// Estima el tiempo de llegada en minutos a velocidad promedio de moto en ciudad (25 km/h)
+  /// Estima el tiempo de desplazamiento en minutos considerando una velocidad urbana promedio.
   int estimateEtaMinutes(double meters) {
     const double avgSpeedKmh = 25.0;
-    const double avgSpeedMpm = (avgSpeedKmh * 1000) / 60; // ~416 metros/min
+    const double avgSpeedMpm = (avgSpeedKmh * 1000) / 60;
     final minutes = (meters / avgSpeedMpm).ceil();
     return minutes < 1 ? 1 : minutes;
   }
 
+  /// Cancela las suscripciones activas del servicio de ubicación.
   void dispose() {
     _positionSubscription?.cancel();
   }

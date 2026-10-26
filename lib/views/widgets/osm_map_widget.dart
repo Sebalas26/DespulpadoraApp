@@ -5,33 +5,69 @@ import '../../config/api_config.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
 
-/// Widget de mapa interactivo con el diseño blanco minimalista de la PWA (OpenStreetMap White Smooth + Pines Enumerados)
+/// Widget de mapa interactivo con teselas cartográficas, polilíneas viales y pines de paradas enumeradas.
 class OsmMapWidget extends StatefulWidget {
+  /// Coordenada GPS actual del domiciliario.
   final LatLng courierLocation;
-  final LatLng destinationLocation;
-  final String destinationTitle;
-  final String courierPlate;
-  final double heading;
-  final bool showPolyline;
-  final bool showPlantaMatriz;
-  final bool showCourierMarker;
-  final int stopSequenceNumber;
-  final List<LatLng>? routePoints; // Trazado activo por calles
-  final List<LatLng>? fullRoutePoints; // Trazado completo multiparada (#1 -> #2 -> #3...)
-  final List<OrderModel>? allStops; // Todas las paradas del domiciliario para mostrar enumeradas
-  final String? activeStopId; // ID de la parada activa/seleccionada
-  final ValueChanged<OrderModel>? onStopTap;
-  final VoidCallback? onRecenter;
-  final double bottomControlsOffset;
-  final bool isNavigationMode; // Activa el efecto zoom-in estilo Waze/Maps al iniciar ruta
-  final int navigationZoomTrigger; // Incrementar para disparar de nuevo el zoom-in estilo Waze
 
+  /// Coordenada GPS del destino o parada enfocada.
+  final LatLng destinationLocation;
+
+  /// Título del punto de destino enfocado.
+  final String destinationTitle;
+
+  /// Placa del vehículo del domiciliario.
+  final String courierPlate;
+
+  /// Rumbo actual del domiciliario en grados.
+  final double heading;
+
+  /// Indica si se debe dibujar la polilínea vial sobre el mapa.
+  final bool showPolyline;
+
+  /// Indica si se debe considerar la coordenada de la planta matriz en el encuadre.
+  final bool showPlantaMatriz;
+
+  /// Indica si se debe mostrar el marcador del domiciliario en vivo.
+  final bool showCourierMarker;
+
+  /// Número de secuencia de la parada activa.
+  final int stopSequenceNumber;
+
+  /// Puntos de la polilínea del tramo vial activo.
+  final List<LatLng>? routePoints;
+
+  /// Puntos de la polilínea del circuito multiparada completo.
+  final List<LatLng>? fullRoutePoints;
+
+  /// Lista completa de paradas asignadas al domiciliario.
+  final List<OrderModel>? allStops;
+
+  /// Identificador de la parada actualmente enfocada.
+  final String? activeStopId;
+
+  /// Callback invocado al tocar un marcador de parada en el mapa.
+  final ValueChanged<OrderModel>? onStopTap;
+
+  /// Callback invocado al centrar el mapa sobre la ubicación del domiciliario.
+  final VoidCallback? onRecenter;
+
+  /// Desplazamiento inferior para los botones flotantes de control de cámara.
+  final double bottomControlsOffset;
+
+  /// Indica si el mapa opera en modo de navegación cercana en vivo.
+  final bool isNavigationMode;
+
+  /// Contador incremental para disparar el acercamiento de navegación.
+  final int navigationZoomTrigger;
+
+  /// Crea una nueva instancia de [OsmMapWidget].
   const OsmMapWidget({
     super.key,
     required this.courierLocation,
     required this.destinationLocation,
     required this.destinationTitle,
-    this.courierPlate = 'XYZ-789',
+    this.courierPlate = '',
     this.heading = 0.0,
     this.showPolyline = true,
     this.showPlantaMatriz = false,
@@ -52,19 +88,31 @@ class OsmMapWidget extends StatefulWidget {
   State<OsmMapWidget> createState() => _OsmMapWidgetState();
 }
 
+/// Estado interno de [OsmMapWidget] que controla la cámara y las animaciones de encuadre.
 class _OsmMapWidgetState extends State<OsmMapWidget>
     with TickerProviderStateMixin {
+  /// Controlador del lienzo cartográfico de `FlutterMap`.
   late final MapController _mapController;
+
+  /// Controlador de animación para transiciones suaves de cámara.
   AnimationController? _cameraAnimController;
-  final MapStyleOption _selectedStyle = ApiConfig.mapStyles.first; // ArcGIS White Minimalist fijo
+
+  /// Estilo cartográfico activo.
+  final MapStyleOption _selectedStyle = ApiConfig.mapStyles.first;
+
+  /// Indica si ya se realizó el encuadre inicial automático de la ruta.
   bool _hasAutoFitted = false;
+
+  /// Indica si el controlador del mapa ya se encuentra inicializado.
   bool _isMapReady = false;
 
+  /// Coordenada geográfica de la planta matriz.
   static const LatLng _plantaMatriz = LatLng(
     ApiConfig.plantaMatrizLat,
     ApiConfig.plantaMatrizLng,
   );
 
+  /// Retorna una coordenada válida del domiciliario dentro del territorio nacional.
   LatLng get _safeCourierLocation {
     final loc = widget.courierLocation;
     if (loc.latitude >= -4.5 &&
@@ -88,7 +136,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     super.dispose();
   }
 
-  /// Animación suave de cámara estilo Waze / Google Maps (interpolando centro y zoom)
+  /// Anima suavemente la cámara del mapa hacia una coordenada y nivel de zoom objetivo.
   void _animateCameraTo(
     LatLng destLocation,
     double destZoom, {
@@ -141,8 +189,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     controller.forward();
   }
 
-  /// Calcula el punto focal cercano de navegación (como Waze/Maps al dar "Iniciar Ruta")
-  /// enfocando la moto del domiciliario y el tramo inmediato de la ruta verde activa.
+  /// Acerca la cámara sobre el domiciliario y el tramo vial activo inmediato.
   void _animateToWazeNavigationCloseUp({
     Duration duration = const Duration(milliseconds: 1550),
   }) {
@@ -155,8 +202,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     double targetZoom = 15.55;
 
     if (activePoints != null && activePoints.length > 4) {
-      // Tomar un punto ~20% adelante del domiciliario sobre la polilínea vial verde
-      // para que en pantalla se vea de cerca tanto la moto como el camino por las calles
       final lookAheadIndex = (activePoints.length * 0.20).round().clamp(
             1,
             activePoints.length - 1,
@@ -168,9 +213,9 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
       );
       targetZoom = 15.55;
     } else {
-      // Si aún se está calculando la polilínea, enfocar cerca del domiciliario hacia la parada #1
       targetCenter = LatLng(
-        (courier.latitude * 0.78) + (widget.destinationLocation.latitude * 0.22),
+        (courier.latitude * 0.78) +
+            (widget.destinationLocation.latitude * 0.22),
         (courier.longitude * 0.78) +
             (widget.destinationLocation.longitude * 0.22),
       );
@@ -188,8 +233,8 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
   @override
   void didUpdateWidget(covariant OsmMapWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final hasRouteNow =
-        (widget.fullRoutePoints != null && widget.fullRoutePoints!.length > 5) ||
+    final hasRouteNow = (widget.fullRoutePoints != null &&
+            widget.fullRoutePoints!.length > 5) ||
         (widget.routePoints != null && widget.routePoints!.length > 5);
 
     if (widget.navigationZoomTrigger != oldWidget.navigationZoomTrigger &&
@@ -205,7 +250,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         if (widget.isNavigationMode) {
-          // Efecto Waze / Google Maps: acercar suavemente la cámara a la ruta activa
           _animateToWazeNavigationCloseUp();
         } else {
           _fitAllRouteBounds();
@@ -226,6 +270,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     }
   }
 
+  /// Centra el mapa sobre la ubicación actual del domiciliario.
   void _centerOnCourier() {
     if (widget.isNavigationMode) {
       _animateToWazeNavigationCloseUp(
@@ -241,6 +286,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     widget.onRecenter?.call();
   }
 
+  /// Ajusta los límites de la cámara para abarcar todas las paradas y el trazado de la ruta.
   void _fitAllRouteBounds() {
     final List<LatLng> pointsToFit = [];
 
@@ -276,9 +322,10 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     }
   }
 
+  /// Obtiene la etiqueta abreviada de la placa para el marcador del vehículo.
   String get _plateShort {
     final clean = widget.courierPlate.trim();
-    if (clean.isEmpty) return 'MOTO';
+    if (clean.isEmpty || clean.toLowerCase() == 'sin placa') return 'MOTO';
     return clean.split(' ').first.split('-').first.toUpperCase();
   }
 
@@ -332,20 +379,16 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             },
           ),
           children: [
-            // 1. Capa Cartográfica Blanca Minimalista 100% Gratuita (ArcGIS White Minimalist sin API Key ni cuenta)
             TileLayer(
               urlTemplate: _selectedStyle.url,
               userAgentPackageName: ApiConfig.userAgentPackageName,
               maxNativeZoom: 19,
               maxZoom: _selectedStyle.maxZoom,
             ),
-
-            // 2. Polilíneas de Enrutamiento Vial Calle por Calle (Estilo PWA)
             if (widget.showPolyline &&
                 (effectiveFullRoute != null || effectiveActiveLeg != null))
               PolylineLayer(
                 polylines: [
-                  // Circuito multiparada completo por calles reales
                   if (effectiveFullRoute != null) ...[
                     Polyline(
                       points: effectiveFullRoute,
@@ -362,8 +405,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
                       strokeJoin: StrokeJoin.round,
                     ),
                   ],
-
-                  // Tramo activo hacia la parada en turno (Verde Esmeralda PWA #10B981)
                   if (effectiveActiveLeg != null) ...[
                     Polyline(
                       points: effectiveActiveLeg,
@@ -382,11 +423,8 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
                   ],
                 ],
               ),
-
-            // 3. Capa de Marcadores (Paradas Enumeradas #1, #2, #3 + Moto en Vivo)
             MarkerLayer(
               markers: [
-                // Marcadores de Paradas Enumeradas (#1, #2, #3...)
                 if (widget.allStops != null && widget.allStops!.isNotEmpty)
                   ..._buildMultiStopMarkers()
                 else
@@ -401,8 +439,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
                       isActive: true,
                     ),
                   ),
-
-                // Marcador del Domiciliario en Vivo con Placa
                 if (widget.showCourierMarker)
                   Marker(
                     point: courierLoc,
@@ -417,15 +453,12 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             ),
           ],
         ),
-
-        // Botones flotantes de control de cámara (Solo Encuadrar Ruta y Mi Ubicación GPS)
         Positioned(
           right: 14,
           bottom: widget.bottomControlsOffset,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Botón encuadrar todo el enrutado
               _buildMapControlFab(
                 heroTag: 'fab_fit_route',
                 icon: Icons.zoom_out_map_rounded,
@@ -435,8 +468,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
                 onPressed: _fitAllRouteBounds,
               ),
               const SizedBox(height: 8),
-
-              // Botón centrar en mi ubicación GPS
               _buildMapControlFab(
                 heroTag: 'fab_center_me',
                 icon: Icons.my_location_rounded,
@@ -449,8 +480,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             ],
           ),
         ),
-
-        // Badge de atribución cartográfica OpenStreetMap
         Positioned(
           left: 10,
           bottom: 6,
@@ -475,6 +504,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     );
   }
 
+  /// Construye un botón flotante cuadrado para los controles de zoom y centrado del mapa.
   Widget _buildMapControlFab({
     required String heroTag,
     required IconData icon,
@@ -513,7 +543,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     );
   }
 
-  /// Construye todos los pines enumerados (#1, #2, #3...) del enrutado del domiciliario
+  /// Construye la lista de marcadores enumerados para cada parada de la ruta.
   List<Marker> _buildMultiStopMarkers() {
     final stops = widget.allStops!;
     final List<Marker> markers = [];
@@ -547,7 +577,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     return markers;
   }
 
-  /// Pin de Parada Enumerada (#1, #2, #3 o ✓) idéntico a renderStopMarkers() de la PWA
+  /// Construye el pin visual de una parada con su número de orden y color de estado.
   Widget _buildNumberedStopMarker({
     required int sequenceNumber,
     required String label,
@@ -559,13 +589,13 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
 
     Color bgColor;
     if (isDelivered) {
-      bgColor = const Color(0xFF10B981); // Emerald Green PWA
+      bgColor = const Color(0xFF10B981);
     } else if (isNovelty) {
-      bgColor = const Color(0xFFDC2626); // Red PWA
+      bgColor = const Color(0xFFDC2626);
     } else if (isActive) {
-      bgColor = AppColors.primary; // DGL Forest Green (#1E5E3A)
+      bgColor = AppColors.primary;
     } else {
-      bgColor = const Color(0xFF2563EB); // Royal Blue para paradas siguientes
+      bgColor = const Color(0xFF2563EB);
     }
 
     final double circleSize = isActive ? 34 : 30;
@@ -641,12 +671,11 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     );
   }
 
-  /// Marcador del Mensajero en Vivo con Placa idéntico a renderCourierMarkers() de la PWA
+  /// Construye el marcador circular del vehículo del domiciliario con su placa.
   Widget _buildPwaCourierMarker() {
     return Stack(
       alignment: Alignment.center,
       children: [
-        // Halo de pulso esmeralda
         Container(
           width: 56,
           height: 56,
@@ -655,7 +684,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             color: const Color(0xFF10B981).withValues(alpha: 0.22),
           ),
         ),
-        // Círculo principal del vehículo
         Container(
           width: 38,
           height: 38,
@@ -684,7 +712,6 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             ),
           ),
         ),
-        // Etiqueta inferior de placa (#0F172A igual a la PWA)
         Positioned(
           bottom: 4,
           right: 2,

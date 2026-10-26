@@ -3,18 +3,25 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'location_service.dart';
 
-/// Información de un tramo o ruta por carreteras reales
+/// Información geométrica y métrica de un tramo vial individual entre dos puntos.
 class RouteData {
+  /// Lista de coordenadas que conforman la polilínea vial del tramo.
   final List<LatLng> points;
+
+  /// Distancia total del tramo en metros.
   final double distanceMeters;
+
+  /// Duración estimada del tramo en segundos.
   final double durationSeconds;
 
+  /// Crea una nueva instancia de [RouteData].
   RouteData({
     required this.points,
     required this.distanceMeters,
     required this.durationSeconds,
   });
 
+  /// Distancia del tramo formateada en metros o kilómetros.
   String get distanceFormatted {
     if (distanceMeters < 1000) {
       return '${distanceMeters.toInt()} m';
@@ -23,21 +30,34 @@ class RouteData {
     }
   }
 
+  /// Duración estimada del tramo redondeada en minutos.
   int get durationMinutes {
     final mins = (durationSeconds / 60).round();
     return mins < 1 ? 1 : mins;
   }
 }
 
-/// Información del enrutado completo multiparada del domiciliario (Igual a PWA)
+/// Información consolidada del enrutado multiparada completo del domiciliario.
 class MultiStopRouteData {
+  /// Polilínea completa continua de todas las paradas de la ruta.
   final List<LatLng> fullPoints;
+
+  /// Lista de polilíneas desglosada por cada tramo entre paradas.
   final List<List<LatLng>> legPoints;
+
+  /// Distancias en metros correspondientes a cada tramo individual.
   final List<double> legDistancesMeters;
+
+  /// Duraciones en segundos correspondientes a cada tramo individual.
   final List<double> legDurationsSeconds;
+
+  /// Distancia total acumulada del circuito en metros.
   final double totalDistanceMeters;
+
+  /// Duración total acumulada del circuito en segundos.
   final double totalDurationSeconds;
 
+  /// Crea una nueva instancia de [MultiStopRouteData].
   MultiStopRouteData({
     required this.fullPoints,
     required this.legPoints,
@@ -47,6 +67,7 @@ class MultiStopRouteData {
     required this.totalDurationSeconds,
   });
 
+  /// Distancia total del circuito formateada en metros o kilómetros.
   String get totalDistanceFormatted {
     if (totalDistanceMeters < 1000) {
       return '${totalDistanceMeters.toInt()} m';
@@ -55,24 +76,31 @@ class MultiStopRouteData {
     }
   }
 
+  /// Duración total estimada del circuito en minutos.
   int get totalDurationMinutes {
     final mins = (totalDurationSeconds / 60).round();
     return mins < 1 ? 1 : mins;
   }
 }
 
-/// Servicio de enrutamiento vehicular exacto calle por calle (Valhalla OSM + OSRM + OSM.de)
+/// Servicio de cálculo de rutas viales calle por calle mediante motores OpenStreetMap (Valhalla y OSRM).
 class RoutingService {
+  /// Cliente HTTP para realizar consultas a los motores de enrutamiento.
   final http.Client _client;
+
+  /// Caché en memoria de segmentos viales previamente calculados.
   static final Map<String, RouteData> _segmentCache = {};
 
+  /// Cabeceras HTTP estándar para peticiones a servidores cartográficos.
   static const Map<String, String> _defaultHeaders = {
     'User-Agent': 'PulpasProApp/1.0 (com.pulpaspro.despulpadora_app)',
     'Accept': 'application/json',
   };
 
+  /// Crea una instancia de [RoutingService] permitiendo inyectar un [http.Client].
   RoutingService({http.Client? client}) : _client = client ?? http.Client();
 
+  /// Asegura que la coordenada se encuentre dentro de los límites geográficos válidos.
   LatLng _ensureColombiaCoord(LatLng pt) {
     if (LocationService.isWithinColombia(pt.latitude, pt.longitude)) {
       return pt;
@@ -80,7 +108,7 @@ class RoutingService {
     return LocationService.defaultLocation;
   }
 
-  /// Obtiene el trazado exacto calle por calle entre dos coordenadas
+  /// Obtiene el trazado vial entre una coordenada de origen y una de destino.
   Future<RouteData> getRoute({
     required LatLng start,
     required LatLng end,
@@ -97,37 +125,36 @@ class RoutingService {
       return cached;
     }
 
-    // 1. Motor Primario: Valhalla OpenStreetMap Routing API (100% gratuito sin API Key)
-    final valhallaRoute = await _fetchValhallaSingleRoute(safeStart, safeEnd);
-    if (valhallaRoute != null && valhallaRoute.points.length > 2) {
-      _segmentCache[cacheKey] = valhallaRoute;
-      return valhallaRoute;
-    }
+    try {
+      final valhallaRoute = await _fetchValhallaSingleRoute(safeStart, safeEnd);
+      if (valhallaRoute != null && valhallaRoute.points.length > 2) {
+        _segmentCache[cacheKey] = valhallaRoute;
+        return valhallaRoute;
+      }
 
-    // 2. Motor Secundario: OSRM Oficial (router.project-osrm.org)
-    final osrmRoute = await _fetchOsrmSingleRoute(
-      'https://router.project-osrm.org/route/v1/driving',
-      safeStart,
-      safeEnd,
-    );
-    if (osrmRoute != null && osrmRoute.points.length > 2) {
-      _segmentCache[cacheKey] = osrmRoute;
-      return osrmRoute;
-    }
+      final osrmRoute = await _fetchOsrmSingleRoute(
+        'https://router.project-osrm.org/route/v1/driving',
+        safeStart,
+        safeEnd,
+      );
+      if (osrmRoute != null && osrmRoute.points.length > 2) {
+        _segmentCache[cacheKey] = osrmRoute;
+        return osrmRoute;
+      }
 
-    // 3. Motor Terciario: OpenStreetMap.de Car Router
-    final osmDeRoute = await _fetchOsrmSingleRoute(
-      'https://routing.openstreetmap.de/routed-car/route/v1/driving',
-      safeStart,
-      safeEnd,
-    );
-    if (osmDeRoute != null && osmDeRoute.points.length > 2) {
-      _segmentCache[cacheKey] = osmDeRoute;
-      return osmDeRoute;
-    }
+      final osmDeRoute = await _fetchOsrmSingleRoute(
+        'https://routing.openstreetmap.de/routed-car/route/v1/driving',
+        safeStart,
+        safeEnd,
+      );
+      if (osmDeRoute != null && osmDeRoute.points.length > 2) {
+        _segmentCache[cacheKey] = osmDeRoute;
+        return osmDeRoute;
+      }
+    } catch (_) {}
 
-    // Fallback final solo si no hay internet en absoluto (NO se guarda en caché para reintentar)
-    final straightDistance = const Distance().as(LengthUnit.Meter, safeStart, safeEnd);
+    final straightDistance =
+        const Distance().as(LengthUnit.Meter, safeStart, safeEnd);
     return RouteData(
       points: [safeStart, safeEnd],
       distanceMeters: straightDistance,
@@ -135,7 +162,7 @@ class RoutingService {
     );
   }
 
-  /// Construye el enrutado completo secuencial calle por calle para todas las paradas del domiciliario
+  /// Calcula el circuito vial completo secuencial para una lista de paradas.
   Future<MultiStopRouteData> getMultiStopRoute({
     required List<LatLng> waypoints,
   }) async {
@@ -152,30 +179,29 @@ class RoutingService {
       );
     }
 
-    // 1. Intentar obtener todo el circuito multiparada en una sola petición a Valhalla OpenStreetMap
-    final valhallaMulti = await _fetchValhallaMultiRoute(safeWaypoints);
-    if (valhallaMulti != null && valhallaMulti.fullPoints.length > 5) {
-      return valhallaMulti;
-    }
+    try {
+      final valhallaMulti = await _fetchValhallaMultiRoute(safeWaypoints);
+      if (valhallaMulti != null && valhallaMulti.fullPoints.length > 5) {
+        return valhallaMulti;
+      }
 
-    // 2. Intentar obtener todo el circuito multiparada en una sola petición a OSRM / OSM.de
-    final osrmMulti = await _fetchOsrmMultiRoute(
-      'https://router.project-osrm.org/route/v1/driving',
-      safeWaypoints,
-    );
-    if (osrmMulti != null && osrmMulti.fullPoints.length > 5) {
-      return osrmMulti;
-    }
+      final osrmMulti = await _fetchOsrmMultiRoute(
+        'https://router.project-osrm.org/route/v1/driving',
+        safeWaypoints,
+      );
+      if (osrmMulti != null && osrmMulti.fullPoints.length > 5) {
+        return osrmMulti;
+      }
 
-    final osmDeMulti = await _fetchOsrmMultiRoute(
-      'https://routing.openstreetmap.de/routed-car/route/v1/driving',
-      safeWaypoints,
-    );
-    if (osmDeMulti != null && osmDeMulti.fullPoints.length > 5) {
-      return osmDeMulti;
-    }
+      final osmDeMulti = await _fetchOsrmMultiRoute(
+        'https://routing.openstreetmap.de/routed-car/route/v1/driving',
+        safeWaypoints,
+      );
+      if (osmDeMulti != null && osmDeMulti.fullPoints.length > 5) {
+        return osmDeMulti;
+      }
+    } catch (_) {}
 
-    // 3. Respaldo tramo por tramo usando getRoute
     final List<LatLng> fullRoadPath = [];
     final List<List<LatLng>> legs = [];
     final List<double> legDistances = [];
@@ -184,7 +210,10 @@ class RoutingService {
     double totalDur = 0;
 
     for (int i = 0; i < safeWaypoints.length - 1; i++) {
-      final seg = await getRoute(start: safeWaypoints[i], end: safeWaypoints[i + 1]);
+      final seg = await getRoute(
+        start: safeWaypoints[i],
+        end: safeWaypoints[i + 1],
+      );
       legs.add(seg.points);
       legDistances.add(seg.distanceMeters);
       legDurations.add(seg.durationSeconds);
@@ -208,12 +237,10 @@ class RoutingService {
     );
   }
 
-  /// Consulta Valhalla OpenStreetMap gratuito para un tramo individual calle por calle
+  /// Consulta el motor Valhalla OpenStreetMap para un tramo individual.
   Future<RouteData?> _fetchValhallaSingleRoute(LatLng start, LatLng end) async {
     try {
-      final url = Uri.parse(
-        'https://valhalla1.openstreetmap.de/route',
-      );
+      final url = Uri.parse('https://valhalla1.openstreetmap.de/route');
       final body = jsonEncode({
         'locations': [
           {'lat': start.latitude, 'lon': start.longitude},
@@ -232,7 +259,8 @@ class RoutingService {
           .timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
         final trip = data['trip'] as Map<String, dynamic>?;
         final legs = trip?['legs'] as List<dynamic>?;
         if (legs != null && legs.isNotEmpty) {
@@ -255,14 +283,12 @@ class RoutingService {
     return null;
   }
 
-  /// Consulta Valhalla OpenStreetMap gratuito para todo el circuito multiparada en una sola petición
+  /// Consulta el motor Valhalla OpenStreetMap para un circuito multiparada.
   Future<MultiStopRouteData?> _fetchValhallaMultiRoute(
     List<LatLng> waypoints,
   ) async {
     try {
-      final url = Uri.parse(
-        'https://valhalla1.openstreetmap.de/route',
-      );
+      final url = Uri.parse('https://valhalla1.openstreetmap.de/route');
       final body = jsonEncode({
         'locations': waypoints
             .map((pt) => {'lat': pt.latitude, 'lon': pt.longitude})
@@ -280,7 +306,8 @@ class RoutingService {
           .timeout(const Duration(seconds: 7));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
         final trip = data['trip'] as Map<String, dynamic>?;
         final legsList = trip?['legs'] as List<dynamic>?;
         if (legsList != null && legsList.isNotEmpty) {
@@ -312,7 +339,6 @@ class RoutingService {
               fullPoints.addAll(pts);
             }
 
-            // Guardar cada tramo en caché para uso inmediato
             if (i + 1 < waypoints.length && pts.length > 2) {
               final s = waypoints[i];
               final e = waypoints[i + 1];
@@ -343,7 +369,7 @@ class RoutingService {
     return null;
   }
 
-  /// Consulta un servidor compatible con OSRM para un tramo individual
+  /// Consulta un servidor compatible con OSRM para un tramo individual.
   Future<RouteData?> _fetchOsrmSingleRoute(
     String baseUrl,
     LatLng start,
@@ -362,10 +388,11 @@ class RoutingService {
           .timeout(const Duration(seconds: 6));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
         if (data['code'] == 'Ok' && (data['routes'] as List).isNotEmpty) {
-          final route = data['routes'][0];
-          final geometry = route['geometry'];
+          final route = data['routes'][0] as Map<String, dynamic>;
+          final geometry = route['geometry'] as Map<String, dynamic>;
           final coordinates = geometry['coordinates'] as List<dynamic>;
 
           final points = coordinates.map<LatLng>((coord) {
@@ -390,7 +417,7 @@ class RoutingService {
     return null;
   }
 
-  /// Consulta un servidor compatible con OSRM para todo el circuito multiparada en una sola llamada
+  /// Consulta un servidor compatible con OSRM para un circuito multiparada.
   Future<MultiStopRouteData?> _fetchOsrmMultiRoute(
     String baseUrl,
     List<LatLng> waypoints,
@@ -412,10 +439,11 @@ class RoutingService {
           .timeout(const Duration(seconds: 7));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
         if (data['code'] == 'Ok' && (data['routes'] as List).isNotEmpty) {
-          final route = data['routes'][0];
-          final geometry = route['geometry'];
+          final route = data['routes'][0] as Map<String, dynamic>;
+          final geometry = route['geometry'] as Map<String, dynamic>;
           final coordinates = geometry['coordinates'] as List<dynamic>;
 
           final fullPoints = coordinates.map<LatLng>((coord) {
@@ -452,7 +480,7 @@ class RoutingService {
     return null;
   }
 
-  /// Decodificador de geometría vial Valhalla Polyline6 (precisión 1e-6)
+  /// Decodifica una cadena en formato Polyline6 a una lista de coordenadas [LatLng].
   List<LatLng> _decodePolyline6(String encoded) {
     const double inv = 1.0 / 1e6;
     final List<LatLng> decoded = [];

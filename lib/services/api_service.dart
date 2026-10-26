@@ -4,188 +4,224 @@ import '../config/api_config.dart';
 import '../models/courier_model.dart';
 import '../models/order_model.dart';
 
-/// Servicio de comunicación REST API para autenticación y gestión de pedidos
+/// Respuesta estructurada con la información de ruta y pedidos asignados al domiciliario.
+class AssignedRouteResponse {
+  /// Lista de pedidos asignados en orden secuencial de entrega.
+  final List<OrderModel> orders;
+
+  /// Indica si el domiciliario cuenta con una ruta asignada activa.
+  final bool hasAssignedRoute;
+
+  /// Indica si el domiciliario ya confirmó la recepción física del cargue.
+  final bool isRouteReceived;
+
+  /// Código identificador de la ruta asignada.
+  final String assignedRouteCode;
+
+  /// Zona o sector geográfico de la ruta asignada.
+  final String assignedRouteZone;
+
+  /// Crea una nueva instancia de [AssignedRouteResponse].
+  const AssignedRouteResponse({
+    required this.orders,
+    this.hasAssignedRoute = false,
+    this.isRouteReceived = false,
+    this.assignedRouteCode = '',
+    this.assignedRouteZone = '',
+  });
+}
+
+/// Servicio de comunicación HTTP REST contra los endpoints móviles (`/api/mobile`) de ApiDespulpadora.
 class ApiService {
+  /// Cliente HTTP inyectable para facilitar pruebas unitarias y peticiones reales.
   final http.Client _client;
 
+  /// Crea una instancia de [ApiService] permitiendo inyectar un [http.Client] personalizado.
   ApiService({http.Client? client}) : _client = client ?? http.Client();
 
-  /// Mock Data para pruebas locales y modo demo cuando el backend esté inaccesible
-  static final CourierModel mockCourier = CourierModel(
-    id: '1',
-    nombre: 'Carlos Mendoza (Operador Cava)',
-    placaVehiculo: 'XYZ-789 (Yamaha FZ)',
-    telefono: '+57 312 456 7890',
-    email: 'admin@pulpaspro.com',
-    token: 'jwt_token_demo_courier_01',
-    isOnline: true,
-  );
-
-  static List<OrderModel> getMockOrders() {
-    return [
-      OrderModel(
-        id: 'ORD-2026-001',
-        clienteNombre: 'Restaurante & Frutería El Oasis',
-        clienteTelefono: '+57 315 889 4432',
-        direccion: 'Calle 72 # 11-45',
-        barrio: 'Chapinero Norte',
-        ciudad: 'Bogotá',
-        latitud: 4.65685,
-        longitud: -74.05928,
-        montoTotal: 148000,
-        metodoPago: 'Efectivo Contraentrega',
-        requiereCobro: true,
-        estado: OrderStatus.asignado,
-        prioridad: 1,
-        notasEntrega: 'Entregar en la cocina, preguntar por Don Mario. Traer cambio de \$200.000.',
-        items: [
-          OrderItem(nombre: 'Pulpa Maracuyá', presentacion: '1000g / 1Kg', cantidad: 10, precioUnitario: 8500),
-          OrderItem(nombre: 'Pulpa Mango Tommy', presentacion: '1000g / 1Kg', cantidad: 5, precioUnitario: 7600),
-          OrderItem(nombre: 'Pulpa Lulo', presentacion: '1000g / 1Kg', cantidad: 3, precioUnitario: 8333),
-        ],
-      ),
-      OrderModel(
-        id: 'ORD-2026-002',
-        clienteNombre: 'Plaza Mercado Las Ferias',
-        clienteTelefono: '+57 310 234 5678',
-        direccion: 'Av. 70 #74-52',
-        barrio: 'Antiguo Country',
-        ciudad: 'Bogotá',
-        latitud: 4.68637,
-        longitud: -74.08943,
-        montoTotal: 84000,
-        metodoPago: 'Transferencia Nequi (Verificado)',
-        requiereCobro: false,
-        estado: OrderStatus.asignado,
-        prioridad: 2,
-        notasEntrega: 'Pago previo verificado por administración. Solo entregar y firmar remisión.',
-        items: [
-          OrderItem(nombre: 'Pulpa Guanábana', presentacion: '140g (Porción)', cantidad: 20, precioUnitario: 2200),
-          OrderItem(nombre: 'Pulpa Fresa', presentacion: '140g (Porción)', cantidad: 20, precioUnitario: 2000),
-        ],
-      ),
-      OrderModel(
-        id: 'ORD-2026-003',
-        clienteNombre: 'Heladería Artesanal Frutos del Bosque',
-        clienteTelefono: '+57 320 998 1122',
-        direccion: 'Calle 93B # 13-24',
-        barrio: 'Chicó Parque 93',
-        ciudad: 'Bogotá',
-        latitud: 4.67845,
-        longitud: -74.05312,
-        montoTotal: 215000,
-        metodoPago: 'Efectivo Contraentrega',
-        requiereCobro: true,
-        estado: OrderStatus.asignado,
-        prioridad: 2,
-        notasEntrega: 'Timbrar en portería y solicitar acceso a parqueadero de descargue.',
-        items: [
-          OrderItem(nombre: 'Pulpa Mora de Castilla', presentacion: '1000g / 1Kg', cantidad: 12, precioUnitario: 7500),
-          OrderItem(nombre: 'Pulpa Feijoa', presentacion: '1000g / 1Kg', cantidad: 8, precioUnitario: 8800),
-          OrderItem(nombre: 'Pulpa Piña Oro Miel', presentacion: '1000g / 1Kg', cantidad: 6, precioUnitario: 9100),
-        ],
-      ),
-      OrderModel(
-        id: 'ORD-2026-004',
-        clienteNombre: 'Café & Panadería Usaquén Gourmet',
-        clienteTelefono: '+57 310 987 6543',
-        direccion: 'Cra 6A # 119-24',
-        barrio: 'Usaquén',
-        ciudad: 'Bogotá',
-        latitud: 4.69800,
-        longitud: -74.03100,
-        montoTotal: 126400,
-        metodoPago: 'Efectivo Contraentrega',
-        requiereCobro: true,
-        estado: OrderStatus.asignado,
-        prioridad: 2,
-        notasEntrega: 'Entregar en puerta lateral sobre la Carrera 6A.',
-        items: [
-          OrderItem(nombre: 'Pulpa Mora de Castilla', presentacion: '140g (Porción)', cantidad: 24, precioUnitario: 2200),
-          OrderItem(nombre: 'Pulpa Maracuyá', presentacion: '140g (Porción)', cantidad: 20, precioUnitario: 2300),
-          OrderItem(nombre: 'Pulpa Guanábana', presentacion: '250g', cantidad: 8, precioUnitario: 3450),
-        ],
-      ),
-    ];
-  }
-
-  /// Autenticación de mensajero conectada a ApiDespulpadora (/auth/login-mobile)
+  /// Autentica al domiciliario contra el endpoint `/api/mobile/auth/login`.
   Future<CourierModel> login({
     required String usernameOrEmail,
     required String password,
   }) async {
     final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.loginEndpoint}');
     try {
-      final response = await _client.post(
-        url,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'username': usernameOrEmail.trim(),
-          'password': password,
-        }),
-      ).timeout(const Duration(seconds: 5));
+      final trimmedUser = usernameOrEmail.trim();
+      final response = await _client
+          .post(
+            url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'username': trimmedUser,
+              'usernameOrEmail': trimmedUser,
+              'password': password,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> data = jsonDecode(response.body);
-        final userData = data['user'] as Map<String, dynamic>? ?? {};
-        final token = data['accessToken'] as String?;
+        final Map<String, dynamic> data =
+            jsonDecode(response.body) as Map<String, dynamic>;
+        final Map<String, dynamic> userData =
+            (data['courier'] as Map<String, dynamic>?) ??
+                (data['user'] as Map<String, dynamic>?) ??
+                data;
+        final String? token =
+            (data['accessToken'] ?? data['token'] ?? userData['accessToken'])
+                ?.toString();
 
+        final rawId = userData['courierId'] ?? userData['id'];
         return CourierModel(
-          id: userData['id']?.toString() ?? '1',
-          nombre: userData['fullName'] ?? userData['username'] ?? 'Mensajero',
-          placaVehiculo: 'XYZ-789',
-          telefono: userData['phone'] ?? '+57 312 456 7890',
-          email: userData['email'] ?? usernameOrEmail,
+          id: rawId != null ? rawId.toString() : '',
+          nombre: (userData['fullName'] ??
+                  userData['nombre'] ??
+                  userData['courierName'] ??
+                  userData['username'] ??
+                  '')
+              .toString(),
+          placaVehiculo:
+              (userData['vehiclePlate'] ?? userData['placaVehiculo'] ?? '')
+                  .toString(),
+          telefono:
+              (userData['phone'] ?? userData['telefono'] ?? '').toString(),
+          email: (userData['email'] ?? trimmedUser).toString(),
           token: token,
-          isOnline: true,
+          isOnline: (userData['isOnline'] ?? true) == true,
         );
       } else {
-        final errorData = jsonDecode(response.body);
-        throw Exception(errorData['message'] ?? 'Credenciales incorrectas');
-      }
-    } catch (e) {
-      // Fallback a login local / demo si el servidor está apagado
-      if (usernameOrEmail.isNotEmpty) {
-        return mockCourier.copyWith(
-          nombre: usernameOrEmail.contains('@') 
-              ? usernameOrEmail.split('@')[0].toUpperCase() 
-              : 'Mensajero $usernameOrEmail',
-          email: usernameOrEmail.contains('@') ? usernameOrEmail : 'courier@pulpaspro.com',
-        );
-      }
-      rethrow;
-    }
-  }
-
-  /// Obtiene la lista de pedidos asignados al mensajero desde la API
-  Future<List<OrderModel>> fetchAssignedOrders({required String courierId, String? token}) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.ordersEndpoint}?courierId=$courierId');
-    try {
-      final response = await _client.get(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 5));
-
-      if (response.statusCode == 200) {
-        final dynamic data = jsonDecode(response.body);
-        final List<dynamic> list = data is List ? data : (data['orders'] ?? data['data'] ?? []);
-        if (list.isNotEmpty) {
-          return list.map((json) => OrderModel.fromJson(json as Map<String, dynamic>)).toList();
+        String errorMessage = 'Credenciales inválidas o acceso no autorizado';
+        if (response.body.isNotEmpty) {
+          try {
+            final Map<String, dynamic> errorData =
+                jsonDecode(response.body) as Map<String, dynamic>;
+            errorMessage =
+                (errorData['message'] ?? errorData['error'] ?? errorMessage)
+                    .toString();
+          } catch (_) {}
         }
-        return getMockOrders();
-      } else {
-        return getMockOrders();
+        throw Exception(errorMessage);
       }
     } catch (e) {
-      // Retorna pedidos de prueba si falla la conexión
-      return getMockOrders();
+      if (e is Exception) {
+        rethrow;
+      }
+      throw Exception('Error de conexión al autenticar domiciliario: $e');
     }
   }
 
-  /// Actualiza el estado de una orden (asignado -> en_ruta -> entregado)
+  /// Consulta la ruta activa y la lista de pedidos asignados al domiciliario en `/api/mobile/orders/assigned`.
+  Future<AssignedRouteResponse> fetchAssignedRoute({
+    required String courierId,
+    String? token,
+  }) async {
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}${ApiConfig.assignedOrdersEndpoint}?courierId=$courierId',
+    );
+    try {
+      final response = await _client
+          .get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 8));
+
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          final orders = decoded
+              .map((json) => OrderModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+          final anyStarted = orders.any((o) => o.estado != OrderStatus.asignado);
+          return AssignedRouteResponse(
+            orders: orders,
+            hasAssignedRoute: orders.isNotEmpty,
+            isRouteReceived: anyStarted,
+          );
+        } else if (decoded is Map<String, dynamic>) {
+          final List<dynamic> list =
+              (decoded['orders'] ?? decoded['data'] ?? []) as List<dynamic>;
+          final orders = list
+              .map((json) => OrderModel.fromJson(json as Map<String, dynamic>))
+              .toList();
+          final anyStarted = orders.any((o) => o.estado != OrderStatus.asignado);
+          final bool hasRoute =
+              (decoded['hasAssignedRoute'] as bool?) ?? orders.isNotEmpty;
+          final bool isReceived =
+              (decoded['isRouteReceived'] as bool?) ?? anyStarted;
+          final String routeCode =
+              (decoded['assignedRouteCode'] ?? decoded['routeCode'] ?? '')
+                  .toString();
+          final String routeZone =
+              (decoded['assignedRouteZone'] ?? decoded['routeZone'] ?? '')
+                  .toString();
+
+          return AssignedRouteResponse(
+            orders: orders,
+            hasAssignedRoute: hasRoute,
+            isRouteReceived: isReceived,
+            assignedRouteCode: routeCode,
+            assignedRouteZone: routeZone,
+          );
+        }
+      }
+      return const AssignedRouteResponse(orders: []);
+    } catch (_) {
+      return const AssignedRouteResponse(orders: []);
+    }
+  }
+
+  /// Obtiene únicamente la lista de pedidos asignados al domiciliario desde la API.
+  Future<List<OrderModel>> fetchAssignedOrders({
+    required String courierId,
+    String? token,
+  }) async {
+    try {
+      final routeResponse = await fetchAssignedRoute(
+        courierId: courierId,
+        token: token,
+      );
+      return routeResponse.orders;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Confirma la recepción física de la ruta asignada en `/api/mobile/orders/confirm-reception`.
+  Future<bool> confirmRouteReception({
+    required String courierId,
+    String? routeCode,
+    String? photoTimestamp,
+    String? token,
+  }) async {
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}${ApiConfig.confirmReceptionEndpoint}',
+    );
+    try {
+      final response = await _client
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'courierId': int.tryParse(courierId) ?? courierId,
+              if (routeCode != null) 'routeCode': routeCode,
+              if (photoTimestamp != null) 'photoTimestamp': photoTimestamp,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
+
+      return response.statusCode == 200 || response.statusCode == 204;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Actualiza el estado operativo de un pedido o confirma su entrega y recaudo.
   Future<bool> updateOrderStatus({
     required String orderId,
     required OrderStatus newStatus,
@@ -202,99 +238,138 @@ class ApiService {
                     ? 'novedad'
                     : 'asignado';
 
-    final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.updateStatusEndpoint}/$orderId/status');
     try {
-      final response = await _client.put(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'status': statusStr,
-        }),
-      ).timeout(const Duration(seconds: 5));
+      if (newStatus == OrderStatus.entregado) {
+        final url = Uri.parse(
+          '${ApiConfig.baseUrl}${ApiConfig.confirmDeliveryEndpoint}/$orderId/confirm-delivery',
+        );
+        final response = await _client
+            .post(
+              url,
+              headers: {
+                'Content-Type': 'application/json',
+                if (token != null) 'Authorization': 'Bearer $token',
+              },
+              body: jsonEncode({
+                'status': statusStr,
+                ...?extraData,
+              }),
+            )
+            .timeout(const Duration(seconds: 6));
+
+        return response.statusCode == 200 || response.statusCode == 204;
+      }
+
+      final url = Uri.parse(
+        '${ApiConfig.baseUrl}${ApiConfig.updateStatusEndpoint}/$orderId/status',
+      );
+      final response = await _client
+          .put(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'status': statusStr,
+              ...?extraData,
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
 
       return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
-      return true;
+    } catch (_) {
+      return false;
     }
   }
 
-  /// Reporta una novedad o motivo de no entrega
+  /// Registra una novedad o motivo de no entrega en `/api/mobile/orders/{id}/novelty`.
   Future<bool> reportNovelty({
     required String orderId,
     required String reason,
     String? token,
   }) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.noveltyEndpoint}/$orderId/novelty');
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}${ApiConfig.noveltyEndpoint}/$orderId/novelty',
+    );
     try {
-      final response = await _client.post(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'noveltyNotes': reason,
-          'newStatus': 'novedad',
-        }),
-      ).timeout(const Duration(seconds: 5));
+      final response = await _client
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'noveltyNotes': reason,
+              'reason': reason,
+              'newStatus': 'novedad',
+            }),
+          )
+          .timeout(const Duration(seconds: 6));
 
       return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
-      return true;
+    } catch (_) {
+      return false;
     }
   }
 
-  /// Envía telemetría GPS del repartidor a la API Central
+  /// Envía la ubicación GPS actual del domiciliario a `/api/mobile/couriers/{id}/location`.
   Future<bool> updateLocation({
     required int courierId,
     required double latitude,
     required double longitude,
     String? token,
   }) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.couriersEndpoint}/$courierId/location');
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}${ApiConfig.couriersEndpoint}/$courierId/location',
+    );
     try {
-      final response = await _client.put(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'latitude': latitude,
-          'longitude': longitude,
-        }),
-      ).timeout(const Duration(seconds: 4));
+      final response = await _client
+          .put(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'latitude': latitude,
+              'longitude': longitude,
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
 
       return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
-  /// Actualiza el estado de turno del repartidor (disponible, en_ruta, fuera_turno)
+  /// Actualiza el estado de turno del domiciliario en `/api/mobile/couriers/{id}/shift-status`.
   Future<bool> updateShiftStatus({
     required int courierId,
     required String status,
     String? token,
   }) async {
-    final url = Uri.parse('${ApiConfig.baseUrl}${ApiConfig.couriersEndpoint}/$courierId/shift-status');
+    final url = Uri.parse(
+      '${ApiConfig.baseUrl}${ApiConfig.couriersEndpoint}/$courierId/shift-status',
+    );
     try {
-      final response = await _client.put(
-        url,
-        headers: {
-          'Content-Type': 'application/json',
-          if (token != null) 'Authorization': 'Bearer $token',
-        },
-        body: jsonEncode({
-          'status': status,
-        }),
-      ).timeout(const Duration(seconds: 4));
+      final response = await _client
+          .put(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+            body: jsonEncode({
+              'status': status,
+            }),
+          )
+          .timeout(const Duration(seconds: 4));
 
       return response.statusCode == 200 || response.statusCode == 204;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }

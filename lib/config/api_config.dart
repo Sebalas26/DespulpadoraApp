@@ -1,15 +1,29 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Opción de estilo cartográfico (Sincronizado con MAP_STYLES de la PWA)
+/// Opción de estilo cartográfico sincronizada con el catálogo visual de la plataforma.
 class MapStyleOption {
+  /// Identificador único del estilo de mapa.
   final String id;
+
+  /// Nombre descriptivo completo del estilo.
   final String name;
+
+  /// Nombre corto para visualización compacta.
   final String shortName;
+
+  /// Etiqueta distintiva del proveedor cartográfico.
   final String badge;
+
+  /// Plantilla URL del servidor de teselas.
   final String url;
+
+  /// Nivel máximo de zoom soportado por el estilo.
   final double maxZoom;
+
+  /// Indica si el estilo corresponde a un tema oscuro.
   final bool isDark;
 
+  /// Crea una nueva instancia de [MapStyleOption].
   const MapStyleOption({
     required this.id,
     required this.name,
@@ -21,30 +35,41 @@ class MapStyleOption {
   });
 }
 
-/// Configuración central de endpoints de API REST para PulpasPro Domicilios (ApiDespulpadora)
+/// Configuración central de endpoints REST (`/api/mobile`) y WebSockets para DespulpadoraApp.
 class ApiConfig {
-  // URLs por defecto (ASP.NET Core Web API en puerto 5000)
-  // Para emulador Android usar http://10.0.2.2:5000/api o IP LAN de la máquina de desarrollo
-  static const String defaultBaseUrl = 'http://localhost:5000/api';
-  static const String defaultWsUrl = 'ws://localhost:5000/ws';
+  /// URL base por defecto del módulo móvil desacoplado en el backend.
+  static const String defaultBaseUrl =
+      'https://apidevdespulpadora.parking-flow.com/api/mobile';
 
-  // Coordenadas de Planta Cava Matriz Cundinamarca (Parque Industrial Calle 80 / Cota) - Igual a PWA
+  /// URL por defecto del servidor WebSocket para telemetría en tiempo real.
+  static const String defaultWsUrl =
+      'wss://apidevdespulpadora.parking-flow.com/ws';
+
+  /// Latitud de la planta matriz de despacho.
   static const double plantaMatrizLat = 4.7125;
+
+  /// Longitud de la planta matriz de despacho.
   static const double plantaMatrizLng = -74.1420;
 
-  // ArcGIS World Topographic White Minimalist (100% Gratuito, sin cuenta ni API Key, limpio desde zoom 1 hasta 19)
+  /// Servidor de teselas ArcGIS World Topographic White Minimalist.
   static const String arcgisWhiteMinimalTileUrl =
       'https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}';
+
+  /// Servidor de teselas Esri World Light Gray Canvas.
   static const String esriGrayTileUrl =
       'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+
+  /// Servidor de teselas OpenStreetMap estándar.
   static const String osmStandardTileUrl =
       'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-  // Tile Server por defecto: ArcGIS White Minimalist (100% gratis, sin cuenta ni API Key)
+  /// Servidor de teselas predeterminado de la aplicación.
   static const String osmTileUrl = arcgisWhiteMinimalTileUrl;
+
+  /// Identificador de paquete para las peticiones de teselas cartográficas.
   static const String userAgentPackageName = 'com.pulpaspro.despulpadora_app';
 
-  // Catálogo de estilos de mapa idéntico a la PWA
+  /// Catálogo de estilos de mapa disponibles en la aplicación.
   static const List<MapStyleOption> mapStyles = [
     MapStyleOption(
       id: 'arcgis-white',
@@ -75,51 +100,94 @@ class ApiConfig {
     ),
   ];
 
-  // Rutas REST conectadas a ApiDespulpadora
-  static const String loginEndpoint = '/auth/login-mobile';
-  static const String ordersEndpoint = '/orders';
-  static const String updateStatusEndpoint = '/orders'; // /orders/{id}/status
-  static const String noveltyEndpoint = '/orders';     // /orders/{id}/novelty
-  static const String couriersEndpoint = '/couriers';   // /couriers/{id}/location
+  /// Endpoint de inicio de sesión móvil.
+  static const String loginEndpoint = '/auth/login';
 
-  // Intervalo de telemetría GPS (segundos)
+  /// Endpoint base de pedidos móviles.
+  static const String ordersEndpoint = '/orders';
+
+  /// Endpoint para consultar la ruta y pedidos asignados al domiciliario.
+  static const String assignedOrdersEndpoint = '/orders/assigned';
+
+  /// Endpoint para confirmar la recepción física de la ruta asignada.
+  static const String confirmReceptionEndpoint = '/orders/confirm-reception';
+
+  /// Endpoint base para actualización de estado de un pedido.
+  static const String updateStatusEndpoint = '/orders';
+
+  /// Endpoint base para confirmación de entrega y recaudo de un pedido.
+  static const String confirmDeliveryEndpoint = '/orders';
+
+  /// Endpoint base para reporte de novedades de entrega.
+  static const String noveltyEndpoint = '/orders';
+
+  /// Endpoint base de domiciliarios para telemetría GPS y estado de turno.
+  static const String couriersEndpoint = '/couriers';
+
+  /// Intervalo en segundos para la transmisión de telemetría GPS.
   static const int telemetryIntervalSeconds = 5;
 
-  // Claves de SharedPreferences
+  /// Clave de persistencia local para la URL base REST.
   static const String keyBaseUrl = 'config_base_url';
+
+  /// Clave de persistencia local para la URL de WebSocket.
   static const String keyWsUrl = 'config_ws_url';
+
+  /// Clave de persistencia local para el token JWT de autenticación.
   static const String keyAuthToken = 'auth_token';
+
+  /// Clave de persistencia local para los datos del perfil del domiciliario.
   static const String keyCourierData = 'courier_profile_data';
+
+  /// Clave de persistencia local para el indicador de turno activo.
   static const String keyIsOnShift = 'courier_is_on_shift';
 
+  /// URL base REST activa en memoria.
   static String _currentBaseUrl = defaultBaseUrl;
+
+  /// URL de WebSocket activa en memoria.
   static String _currentWsUrl = defaultWsUrl;
 
+  /// Obtiene la URL base REST actualmente configurada.
   static String get baseUrl => _currentBaseUrl;
+
+  /// Obtiene la URL de WebSocket actualmente configurada.
   static String get wsUrl => _currentWsUrl;
 
-  /// Inicializa configuraciones guardadas
+  /// Inicializa las configuraciones de conexión almacenadas en preferencias locales.
   static Future<void> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    _currentBaseUrl = prefs.getString(keyBaseUrl) ?? defaultBaseUrl;
-    _currentWsUrl = prefs.getString(keyWsUrl) ?? defaultWsUrl;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      _currentBaseUrl = prefs.getString(keyBaseUrl) ?? defaultBaseUrl;
+      _currentWsUrl = prefs.getString(keyWsUrl) ?? defaultWsUrl;
+    } catch (_) {
+      _currentBaseUrl = defaultBaseUrl;
+      _currentWsUrl = defaultWsUrl;
+    }
   }
 
-  /// Permite cambiar las URLs dinámicamente desde la app para pruebas de campo
-  static Future<void> setCustomUrls({required String baseUrl, required String wsUrl}) async {
+  /// Actualiza dinámicamente las URLs del servidor REST y WebSocket.
+  static Future<void> setCustomUrls({
+    required String baseUrl,
+    required String wsUrl,
+  }) async {
     _currentBaseUrl = baseUrl;
     _currentWsUrl = wsUrl;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(keyBaseUrl, baseUrl);
-    await prefs.setString(keyWsUrl, wsUrl);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(keyBaseUrl, baseUrl);
+      await prefs.setString(keyWsUrl, wsUrl);
+    } catch (_) {}
   }
 
-  /// Restablece URLs por defecto
+  /// Restablece las URLs de conexión a los valores predeterminados de producción/desarrollo.
   static Future<void> resetDefaults() async {
     _currentBaseUrl = defaultBaseUrl;
     _currentWsUrl = defaultWsUrl;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(keyBaseUrl);
-    await prefs.remove(keyWsUrl);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(keyBaseUrl);
+      await prefs.remove(keyWsUrl);
+    } catch (_) {}
   }
 }

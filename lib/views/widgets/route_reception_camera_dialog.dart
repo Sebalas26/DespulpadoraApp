@@ -3,13 +3,21 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../config/theme.dart';
 
-/// Modal de Cámara / Evidencia Fotográfica para recibir el pedido de la ruta asignada
+/// Diálogo modal de captura de evidencia fotográfica para confirmar la recepción del cargue en planta.
 class RouteReceptionCameraDialog extends StatefulWidget {
+  /// Código identificador de la ruta asignada.
   final String routeCode;
+
+  /// Zona geográfica de la ruta asignada.
   final String routeZone;
+
+  /// Cantidad total de pedidos en la ruta.
   final int totalOrders;
+
+  /// Cantidad total de unidades de producto en la ruta.
   final int totalUnits;
 
+  /// Crea una nueva instancia de [RouteReceptionCameraDialog].
   const RouteReceptionCameraDialog({
     super.key,
     required this.routeCode,
@@ -18,6 +26,7 @@ class RouteReceptionCameraDialog extends StatefulWidget {
     required this.totalUnits,
   });
 
+  /// Abre el diálogo modal de evidencia de recepción y retorna la marca de tiempo capturada.
   static Future<String?> show(
     BuildContext context, {
     required String routeCode,
@@ -43,12 +52,19 @@ class RouteReceptionCameraDialog extends StatefulWidget {
       _RouteReceptionCameraDialogState();
 }
 
+/// Estado interno de [RouteReceptionCameraDialog] que gestiona la captura y marca de tiempo.
 class _RouteReceptionCameraDialogState
     extends State<RouteReceptionCameraDialog> {
+  /// Indica si se debe mostrar el destello visual del obturador.
   bool _showFlash = false;
+
+  /// Indica si la fotografía de recepción ya fue capturada.
   bool _hasCapturedPhoto = false;
+
+  /// Marca de tiempo formateada de la captura.
   String _capturedTimestamp = '';
 
+  /// Registra la captura de evidencia con la fecha y hora actuales.
   void _capturePhoto() {
     final now = DateTime.now();
     final formatted = DateFormat('dd/MM/yyyy • hh:mm:ss a').format(now);
@@ -93,7 +109,6 @@ class _RouteReceptionCameraDialogState
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // 1. Barra superior de la cámara
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -158,15 +173,12 @@ class _RouteReceptionCameraDialogState
                   ],
                 ),
               ),
-
-              // 2. Visor de Cámara / Vista Previa de Foto Capturada
               SizedBox(
                 height: 310,
                 width: double.infinity,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    // Fondo del visor simulando encuadre de canastillas de pulpa
                     Container(
                       decoration: const BoxDecoration(
                         gradient: LinearGradient(
@@ -237,8 +249,6 @@ class _RouteReceptionCameraDialogState
                         ),
                       ),
                     ),
-
-                    // Esquinas de enfoque del visor
                     Padding(
                       padding: const EdgeInsets.all(24),
                       child: CustomPaint(
@@ -249,8 +259,6 @@ class _RouteReceptionCameraDialogState
                         ),
                       ),
                     ),
-
-                    // Marca de agua inferior con GPS y Ruta
                     Positioned(
                       left: 16,
                       right: 16,
@@ -302,8 +310,6 @@ class _RouteReceptionCameraDialogState
                         ),
                       ),
                     ),
-
-                    // Efecto Flash al obturar
                     IgnorePointer(
                       child: AnimatedOpacity(
                         opacity: _showFlash ? 1.0 : 0.0,
@@ -314,8 +320,6 @@ class _RouteReceptionCameraDialogState
                   ],
                 ),
               ),
-
-              // 3. Controles inferiores: Botón de Tomar Foto o Confirmar Recepción
               Container(
                 padding: const EdgeInsets.all(16),
                 color: const Color(0xFF1E293B),
@@ -427,9 +431,12 @@ class _RouteReceptionCameraDialogState
   }
 }
 
+/// Pintor personalizado para dibujar las esquinas de enfoque del visor de cámara.
 class _ViewfinderCornersPainter extends CustomPainter {
+  /// Color de las líneas de esquina del visor.
   final Color color;
 
+  /// Crea una nueva instancia de [_ViewfinderCornersPainter].
   const _ViewfinderCornersPainter({required this.color});
 
   @override
@@ -442,19 +449,19 @@ class _ViewfinderCornersPainter extends CustomPainter {
 
     const double len = 24;
 
-    // Top-left
     canvas.drawLine(const Offset(0, len), Offset.zero, paint);
     canvas.drawLine(Offset.zero, const Offset(len, 0), paint);
 
-    // Top-right
     canvas.drawLine(Offset(size.width - len, 0), Offset(size.width, 0), paint);
     canvas.drawLine(Offset(size.width, 0), Offset(size.width, len), paint);
 
-    // Bottom-left
-    canvas.drawLine(Offset(0, size.height - len), Offset(0, size.height), paint);
+    canvas.drawLine(
+      Offset(0, size.height - len),
+      Offset(0, size.height),
+      paint,
+    );
     canvas.drawLine(Offset(0, size.height), Offset(len, size.height), paint);
 
-    // Bottom-right
     canvas.drawLine(
       Offset(size.width - len, size.height),
       Offset(size.width, size.height),
@@ -471,4 +478,3 @@ class _ViewfinderCornersPainter extends CustomPainter {
   bool shouldRepaint(covariant _ViewfinderCornersPainter oldDelegate) =>
       oldDelegate.color != color;
 }
-

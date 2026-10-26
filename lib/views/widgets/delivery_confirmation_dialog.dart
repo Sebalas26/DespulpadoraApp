@@ -2,14 +2,24 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
 
-/// Opción visual de Forma de Pago en la confirmación de entrega
+/// Opción de método de pago disponible durante la confirmación de entrega.
 class PaymentMethodOption {
+  /// Identificador único del método de pago.
   final String id;
+
+  /// Nombre visible del método de pago.
   final String label;
+
+  /// Subtítulo descriptivo de la modalidad de recaudo.
   final String subtitle;
+
+  /// Icono representativo del medio de pago.
   final IconData icon;
+
+  /// Color distintivo de la opción.
   final Color color;
 
+  /// Crea una nueva instancia de [PaymentMethodOption].
   const PaymentMethodOption({
     required this.id,
     required this.label,
@@ -19,9 +29,12 @@ class PaymentMethodOption {
   });
 }
 
-/// Modal para confirmar la entrega exitosa, seleccionar la forma de pago y registrar el recaudo
+/// Diálogo modal para confirmar la entrega del pedido, seleccionar el medio de pago y registrar el recaudo.
 class DeliveryConfirmationDialog extends StatefulWidget {
+  /// Pedido cuya entrega se está confirmando.
   final OrderModel order;
+
+  /// Función callback invocada al confirmar la entrega con los datos de pago y recepción.
   final void Function(
     double cashReceived,
     String receiverName,
@@ -29,6 +42,7 @@ class DeliveryConfirmationDialog extends StatefulWidget {
     String paymentMethod,
   ) onConfirm;
 
+  /// Crea una nueva instancia de [DeliveryConfirmationDialog].
   const DeliveryConfirmationDialog({
     super.key,
     required this.order,
@@ -40,8 +54,10 @@ class DeliveryConfirmationDialog extends StatefulWidget {
       _DeliveryConfirmationDialogState();
 }
 
+/// Estado interno de [DeliveryConfirmationDialog] que gestiona los campos de recaudo y receptor.
 class _DeliveryConfirmationDialogState
     extends State<DeliveryConfirmationDialog> {
+  /// Catálogo de medios de pago habilitados para confirmación en punto.
   static const List<PaymentMethodOption> _paymentOptions = [
     PaymentMethodOption(
       id: 'Efectivo',
@@ -80,9 +96,16 @@ class _DeliveryConfirmationDialogState
     ),
   ];
 
+  /// Controlador para el monto recibido en efectivo.
   late final TextEditingController _cashController;
+
+  /// Controlador para el nombre de la persona que recibe el pedido.
   late final TextEditingController _receiverController;
+
+  /// Controlador para observaciones o número de comprobante.
   late final TextEditingController _notesController;
+
+  /// Método de pago seleccionado actualmente.
   late String _selectedPaymentMethod;
 
   @override
@@ -98,6 +121,7 @@ class _DeliveryConfirmationDialogState
     _notesController = TextEditingController();
   }
 
+  /// Determina la opción de pago inicial a partir del método configurado en la orden.
   String _detectInitialMethod(String rawMethod) {
     final lower = rawMethod.toLowerCase();
     if (lower.contains('nequi')) return 'Nequi';
@@ -136,7 +160,6 @@ class _DeliveryConfirmationDialogState
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabecera
             Row(
               children: [
                 Container(
@@ -178,12 +201,9 @@ class _DeliveryConfirmationDialogState
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
             const Divider(height: 1),
             const SizedBox(height: 14),
-
-            // Card Resumen del Valor del Pedido
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
@@ -226,10 +246,7 @@ class _DeliveryConfirmationDialogState
                 ],
               ),
             ),
-
             const SizedBox(height: 16),
-
-            // Selector de Formas de Pago
             const Text(
               'Selecciona la Forma de Pago',
               style: TextStyle(
@@ -239,7 +256,6 @@ class _DeliveryConfirmationDialogState
               ),
             ),
             const SizedBox(height: 8),
-
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -263,7 +279,8 @@ class _DeliveryConfirmationDialogState
                           : AppColors.background,
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
-                        color: isSelected ? opt.color : AppColors.borderHighlight,
+                        color:
+                            isSelected ? opt.color : AppColors.borderHighlight,
                         width: isSelected ? 1.6 : 1.0,
                       ),
                     ),
@@ -273,7 +290,8 @@ class _DeliveryConfirmationDialogState
                         Icon(
                           opt.icon,
                           size: 16,
-                          color: isSelected ? opt.color : AppColors.textSecondary,
+                          color:
+                              isSelected ? opt.color : AppColors.textSecondary,
                         ),
                         const SizedBox(width: 6),
                         Text(
@@ -282,9 +300,8 @@ class _DeliveryConfirmationDialogState
                             fontSize: 12.5,
                             fontWeight:
                                 isSelected ? FontWeight.w900 : FontWeight.w700,
-                            color: isSelected
-                                ? opt.color
-                                : AppColors.textPrimary,
+                            color:
+                                isSelected ? opt.color : AppColors.textPrimary,
                           ),
                         ),
                         if (isSelected) ...[
@@ -301,10 +318,7 @@ class _DeliveryConfirmationDialogState
                 );
               }).toList(),
             ),
-
             const SizedBox(height: 16),
-
-            // Campo de monto recibido cuando es Efectivo o aviso de pago digital/crédito
             if (isCashSelected) ...[
               const Text(
                 'Efectivo Recibido (\$ COP)',
@@ -320,7 +334,7 @@ class _DeliveryConfirmationDialogState
                 keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
                   prefixIcon: Icon(Icons.attach_money_rounded),
-                  hintText: 'Ej. 148000',
+                  hintText: 'Monto recibido',
                 ),
               ),
               const SizedBox(height: 14),
@@ -361,8 +375,6 @@ class _DeliveryConfirmationDialogState
               ),
               const SizedBox(height: 14),
             ],
-
-            // Nombre de quién recibe
             const Text(
               'Nombre de quién recibe',
               style: TextStyle(
@@ -379,10 +391,7 @@ class _DeliveryConfirmationDialogState
                 hintText: 'Nombre completo',
               ),
             ),
-
             const SizedBox(height: 14),
-
-            // Observaciones opcionales
             const Text(
               'Observaciones / N° Comprobante (Opcional)',
               style: TextStyle(
@@ -397,13 +406,10 @@ class _DeliveryConfirmationDialogState
               maxLines: 2,
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.notes_rounded),
-                hintText: 'Ej. Recibió en portería / Comprobante Nequi #4589',
+                hintText: 'Observaciones de la entrega o referencia de pago',
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // Botones de Acción
             Row(
               children: [
                 Expanded(

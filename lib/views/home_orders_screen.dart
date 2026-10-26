@@ -11,18 +11,27 @@ import '../services/websocket_service.dart';
 import 'widgets/order_card_widget.dart';
 import 'widgets/route_reception_camera_dialog.dart';
 
-/// Dashboard Principal de Domicilios y Rutas del Día
+/// Pantalla principal de gestión de ruta y pedidos del domiciliario.
 class HomeOrdersScreen extends StatefulWidget {
+  /// Crea una nueva instancia de [HomeOrdersScreen].
   const HomeOrdersScreen({super.key});
 
   @override
   State<HomeOrdersScreen> createState() => _HomeOrdersScreenState();
 }
 
+/// Estado interno de [HomeOrdersScreen] que controla la carga de ruta, recepción y filtros.
 class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
+  /// Clave global del botón de opciones superiores para posicionamiento del menú.
   final GlobalKey _menuButtonKey = GlobalKey();
+
+  /// Indica si el menú contextual superior se encuentra desplegado.
   bool _isMenuOpen = false;
-  bool _isSimulatingEndpointLoad = false;
+
+  /// Indica si el efecto visual de transición de carga se encuentra activo.
+  bool _isLoadingTransition = false;
+
+  /// Temporizador para finalizar la animación de carga de tarjetas.
   Timer? _shimmerTimer;
 
   @override
@@ -31,6 +40,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     _refreshData();
   }
 
+  /// Abre el modal de evidencia fotográfica y confirma la recepción de la ruta en el backend.
   Future<void> _handleOpenReceptionCamera(OrdersState ordersState) async {
     final photoTimestamp = await RouteReceptionCameraDialog.show(
       context,
@@ -42,9 +52,13 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
 
     if (!mounted || photoTimestamp == null) return;
 
-    context
-        .read<OrdersCubit>()
-        .confirmRouteReception(photoTimestamp: photoTimestamp);
+    final courier = context.read<AuthCubit>().currentCourier;
+    await context.read<OrdersCubit>().confirmRouteReception(
+          photoTimestamp: photoTimestamp,
+          courierId: courier?.id,
+          token: courier?.token,
+        );
+    if (!mounted) return;
     _triggerShiftShimmerLoad();
   }
 
@@ -54,16 +68,18 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     super.dispose();
   }
 
+  /// Activa brevemente el esqueleto visual durante la sincronización de interfaz.
   void _triggerShiftShimmerLoad() {
     _shimmerTimer?.cancel();
-    setState(() => _isSimulatingEndpointLoad = true);
-    _shimmerTimer = Timer(const Duration(seconds: 3), () {
+    setState(() => _isLoadingTransition = true);
+    _shimmerTimer = Timer(const Duration(milliseconds: 900), () {
       if (mounted) {
-        setState(() => _isSimulatingEndpointLoad = false);
+        setState(() => _isLoadingTransition = false);
       }
     });
   }
 
+  /// Consulta los pedidos asignados reales desde la API y sincroniza la telemetría GPS.
   void _refreshData() {
     final courier = context.read<AuthCubit>().currentCourier;
     if (courier != null) {
@@ -71,7 +87,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
             courierId: courier.id,
             token: courier.token,
           );
-      // Sincronizar estado de rastreo
       final activeOrderId = context.read<OrdersCubit>().state.activeOrderId;
       context.read<TrackingCubit>().syncWithShiftStatus(
             courier: courier,
@@ -80,10 +95,12 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     }
   }
 
+  /// Navega a la vista previa del mapa de la ruta asignada.
   void _openRoutePreview() {
     Navigator.of(context).pushNamed(AppRoutes.routePreviewMap);
   }
 
+  /// Despliega el menú superior de acciones de sincronización y cierre de sesión.
   Future<void> _openTopOptionsMenu() async {
     final renderBox =
         _menuButtonKey.currentContext?.findRenderObject() as RenderBox?;
@@ -100,8 +117,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
 
     final screenWidth = MediaQuery.of(context).size.width;
     final rightEdge = screenWidth - (buttonOffset.dx + buttonSize.width);
-    final hasAssignedRoute =
-        context.read<OrdersCubit>().state.hasAssignedRoute;
 
     setState(() => _isMenuOpen = true);
 
@@ -109,13 +124,11 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       context: context,
       barrierDismissible: true,
       barrierLabel: 'Cerrar menú de opciones',
-      // Oscurecido suave y ligero en el fondo ("un poco no más, no tan oscuro")
       barrierColor: Colors.black.withValues(alpha: 0.22),
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (dialogContext, animation, secondaryAnimation) {
         return Stack(
           children: [
-            // Botón de 3 puntos resaltado por encima del fondo oscurecido, conectado a la card
             Positioned(
               top: buttonOffset.dy,
               right: rightEdge,
@@ -150,15 +163,12 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                 ),
               ),
             ),
-
-            // Card emergente que nace directamente desde el icono de los 3 puntos
             Positioned(
               top: buttonOffset.dy + buttonSize.height + 2,
               right: rightEdge,
               child: _AnimatedThreeDotsMenuCard(
                 animation: animation,
                 buttonWidth: buttonSize.width,
-                hasAssignedRoute: hasAssignedRoute,
                 onSelect: (action) => Navigator.of(dialogContext).pop(action),
               ),
             ),
@@ -178,25 +188,16 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       if (context.read<OrdersCubit>().state.isRouteReceived) {
         _triggerShiftShimmerLoad();
       }
-    } else if (selectedAction == 'toggle_route_assignment') {
-      final ordersCubit = context.read<OrdersCubit>();
-      final currentlyAssigned = ordersCubit.state.hasAssignedRoute;
-      if (!currentlyAssigned) {
-        // Simular que llega una ruta asignada desde la PWA (pendiente por recibir pedido con foto)
-        ordersCubit.setRouteAssignment(true, received: false);
-      } else {
-        // Volver a estado sin ruta asignada
-        ordersCubit.setRouteAssignment(false, received: false);
-        _shimmerTimer?.cancel();
-        setState(() => _isSimulatingEndpointLoad = false);
-      }
     } else if (selectedAction == 'logout') {
       context.read<TrackingCubit>().stopTracking();
-      context.read<AuthCubit>().logout();
-      Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+      await context.read<AuthCubit>().logout();
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.login);
+      }
     }
   }
 
+  /// Formatea un valor numérico en pesos colombianos (COP).
   String _formatCop(double value) {
     final fmt = NumberFormat.currency(
       locale: 'es_CO',
@@ -209,6 +210,14 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final courier = context.watch<AuthCubit>().currentCourier;
+    final courierName =
+        (courier != null && courier.nombre.trim().isNotEmpty)
+            ? courier.nombre.trim()
+            : '';
+    final courierPlate =
+        (courier != null && courier.placaVehiculo.trim().isNotEmpty)
+            ? courier.placaVehiculo.trim()
+            : 'Sin placa';
 
     return Scaffold(
       appBar: AppBar(
@@ -240,7 +249,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    courier?.nombre ?? 'Mensajero PulpasPro',
+                    courierName,
                     style: const TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w700,
@@ -249,7 +258,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   Text(
-                    'Placa: ${courier?.placaVehiculo.isNotEmpty == true ? courier?.placaVehiculo : "XYZ-123"}',
+                    'Placa: $courierPlate',
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
@@ -263,7 +272,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
           ],
         ),
         actions: [
-          // Indicador de estado WebSocket en tiempo real
           BlocBuilder<TrackingCubit, TrackingState>(
             builder: (context, trackState) {
               final isConnected =
@@ -338,9 +346,8 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   ),
                   child: Icon(
                     Icons.more_vert_rounded,
-                    color: _isMenuOpen
-                        ? AppColors.primary
-                        : AppColors.textPrimary,
+                    color:
+                        _isMenuOpen ? AppColors.primary : AppColors.textPrimary,
                     size: 21,
                   ),
                 ),
@@ -355,8 +362,9 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
         backgroundColor: AppColors.surface,
         child: BlocConsumer<OrdersCubit, OrdersState>(
           listener: (context, state) {
-            // Mantener sincronizado el tracking con el pedido activo
-            context.read<TrackingCubit>().updateActiveOrder(state.activeOrderId);
+            context
+                .read<TrackingCubit>()
+                .updateActiveOrder(state.activeOrderId);
           },
           builder: (context, ordersState) {
             final hasRoute = ordersState.hasAssignedRoute;
@@ -365,14 +373,11 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
 
             return CustomScrollView(
               slivers: [
-                // CASO 1: Aún NO tiene una ruta asignada desde la PWA
                 if (!hasRoute)
                   SliverFillRemaining(
                     hasScrollBody: false,
                     child: _buildNoRouteAssignedState(context),
                   ),
-
-                // CASO 2: Tiene ruta asignada desde la PWA, pendiente por Recibir Pedido y Tomar Foto
                 if (hasRoute && !isReceived)
                   SliverFillRemaining(
                     hasScrollBody: false,
@@ -381,18 +386,16 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                       ordersState,
                     ),
                   ),
-
-                // CASO 3: Ya recibió el pedido y tomó la foto -> Mostrar Resumen + Filtros + Lista de Pedidos
                 if (showOrdersListUi) ...[
                   SliverToBoxAdapter(
                     child: _buildHeaderMetrics(context, ordersState),
                   ),
                   SliverToBoxAdapter(
-                    child: _isSimulatingEndpointLoad
+                    child: _isLoadingTransition
                         ? const _FacebookShimmerFilterChips()
                         : _buildFilterChips(context, ordersState),
                   ),
-                  if (_isSimulatingEndpointLoad)
+                  if (_isLoadingTransition)
                     SliverList(
                       delegate: SliverChildBuilderDelegate(
                         (context, index) => const _FacebookShimmerOrderCard(),
@@ -440,14 +443,13 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       ),
       floatingActionButton: BlocBuilder<OrdersCubit, OrdersState>(
         builder: (context, ordersState) {
-          // Mostrar Ver Ruta únicamente cuando ya recibió el pedido con foto
           if (!ordersState.hasAssignedRoute ||
               !ordersState.isRouteReceived ||
               ordersState.orders.isEmpty) {
             return const SizedBox.shrink();
           }
 
-          if (_isSimulatingEndpointLoad) {
+          if (_isLoadingTransition) {
             return const _FacebookShimmerFab();
           }
 
@@ -474,6 +476,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     );
   }
 
+  /// Construye el bloque superior con el código de ruta y el resumen de métricas 2x2.
   Widget _buildHeaderMetrics(
     BuildContext context,
     OrdersState state,
@@ -503,7 +506,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       ),
       child: Column(
         children: [
-          // Cabecera de Ruta Activa y Pedido Recibido (Sin switch de Disponible)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -587,18 +589,14 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 16),
           const Divider(height: 1),
           const SizedBox(height: 16),
-
-          if (_isSimulatingEndpointLoad)
+          if (_isLoadingTransition)
             const _FacebookShimmerMetricsGrid()
           else ...[
-            // Métricas en Grid de 2x2
             Row(
               children: [
-                // Total Asignados
                 Expanded(
                   child: _buildMetricCard(
                     title: 'Asignados Hoy',
@@ -609,7 +607,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Total Entregados
                 Expanded(
                   child: _buildMetricCard(
                     title: 'Entregados',
@@ -622,10 +619,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 10),
-
-            // Métricas de Caja / Efectivo
             Row(
               children: [
                 Expanded(
@@ -655,6 +649,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     );
   }
 
+  /// Construye una tarjeta individual de métrica operativa.
   Widget _buildMetricCard({
     required String title,
     required String value,
@@ -705,6 +700,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     );
   }
 
+  /// Construye la fila de botones de filtro (Todos, Pendientes, Entregados).
   Widget _buildFilterChips(BuildContext context, OrdersState state) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -735,6 +731,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     );
   }
 
+  /// Construye un botón de filtro individual estilizado como cápsula.
   Widget _buildChip({
     required String label,
     required bool isSelected,
@@ -774,6 +771,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     );
   }
 
+  /// Construye la vista informativa cuando el domiciliario aún no tiene una ruta asignada en el servidor.
   Widget _buildNoRouteAssignedState(BuildContext context) {
     return Center(
       child: Padding(
@@ -805,7 +803,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Cuando desde la PWA te asignen el enrutado del día, podrás recibir el pedido y ver tu listado de entregas.',
+              'Cuando desde la central te asignen el enrutado del día, podrás recibir el pedido y ver tu listado de entregas.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12.5,
@@ -817,14 +815,10 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
             SizedBox(
               height: 38,
               child: OutlinedButton.icon(
-                onPressed: () {
-                  context
-                      .read<OrdersCubit>()
-                      .setRouteAssignment(true, received: false);
-                },
-                icon: const Icon(Icons.bolt_rounded, size: 17),
+                onPressed: _refreshData,
+                icon: const Icon(Icons.refresh_rounded, size: 17),
                 label: const Text(
-                  'Simular asignación de ruta (PWA)',
+                  'Actualizar Ruta',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w800,
@@ -846,8 +840,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     );
   }
 
-  /// Vista cuando el domiciliario YA TIENE RUTA ASIGNADA desde la PWA,
-  /// pero debe pulsar "Recibir Pedido" y tomar la foto para ver la lista de entregas.
+  /// Construye la vista previa de recepción física cuando la ruta está asignada pero pendiente de evidencia fotográfica.
   Widget _buildPendingRouteReceptionState(
     BuildContext context,
     OrdersState state,
@@ -873,7 +866,6 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Badge superior de Nueva Ruta Asignada
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
@@ -903,10 +895,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
-              // Código y Zona de la Ruta
               Text(
                 'Ruta ${state.assignedRouteCode}',
                 style: const TextStyle(
@@ -924,10 +913,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   color: AppColors.textSecondary,
                 ),
               ),
-
               const SizedBox(height: 18),
-
-              // Resumen del cargue a recibir
               Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
@@ -1022,9 +1008,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   ],
                 ),
               ),
-
               const SizedBox(height: 16),
-
               const Text(
                 'Verifica las canastillas de pulpa en planta y toma una foto de recepción para habilitar tu listado de pedidos.',
                 textAlign: TextAlign.center,
@@ -1034,10 +1018,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   height: 1.4,
                 ),
               ),
-
               const SizedBox(height: 20),
-
-              // Botón principal: Recibir Pedido y Tomar Foto
               SizedBox(
                 width: double.infinity,
                 height: 50,
@@ -1069,6 +1050,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
     );
   }
 
+  /// Construye el mensaje de estado vacío cuando el filtro seleccionado no arroja pedidos.
   Widget _buildEmptyState(OrdersFilter filter) {
     return Center(
       child: Padding(
@@ -1110,17 +1092,21 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
   }
 }
 
-/// Card desplegable animada que nace desde el botón de los 3 puntos
+/// Tarjeta desplegable animada del menú de opciones superiores.
 class _AnimatedThreeDotsMenuCard extends StatelessWidget {
+  /// Animación de apertura y cierre del diálogo.
   final Animation<double> animation;
+
+  /// Ancho del botón de origen para alinear el puntero superior.
   final double buttonWidth;
-  final bool hasAssignedRoute;
+
+  /// Callback invocado al seleccionar una acción del menú.
   final ValueChanged<String> onSelect;
 
+  /// Crea una nueva instancia de [_AnimatedThreeDotsMenuCard].
   const _AnimatedThreeDotsMenuCard({
     required this.animation,
     required this.buttonWidth,
-    required this.hasAssignedRoute,
     required this.onSelect,
   });
 
@@ -1148,7 +1134,6 @@ class _AnimatedThreeDotsMenuCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Puntero superior que conecta visualmente la card con el icono de 3 puntos
               Padding(
                 padding: EdgeInsets.only(
                   right: (buttonWidth / 2) - 9,
@@ -1161,8 +1146,6 @@ class _AnimatedThreeDotsMenuCard extends StatelessWidget {
                   ),
                 ),
               ),
-
-              // Cuerpo de la Card del menú (sin "Ver Ruta")
               Container(
                 width: 248,
                 padding: const EdgeInsets.all(8),
@@ -1195,7 +1178,6 @@ class _AnimatedThreeDotsMenuCard extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Opción 1: Actualizar Pedidos
                     _buildMenuActionTile(
                       icon: Icons.refresh_rounded,
                       iconBgColor: AppColors.primarySoft,
@@ -1205,7 +1187,6 @@ class _AnimatedThreeDotsMenuCard extends StatelessWidget {
                       titleColor: AppColors.textPrimary,
                       onTap: () => onSelect('refresh'),
                     ),
-
                     const Padding(
                       padding: EdgeInsets.symmetric(
                         horizontal: 8,
@@ -1213,33 +1194,6 @@ class _AnimatedThreeDotsMenuCard extends StatelessWidget {
                       ),
                       child: Divider(height: 1),
                     ),
-
-                    // Opción 2: Simular Con Ruta / Sin Ruta desde la PWA
-                    _buildMenuActionTile(
-                      icon: hasAssignedRoute
-                          ? Icons.route_outlined
-                          : Icons.bolt_rounded,
-                      iconBgColor: const Color(0xFFFEF3C7),
-                      iconColor: const Color(0xFFD97706),
-                      title: hasAssignedRoute
-                          ? 'Probar Sin Ruta'
-                          : 'Recibir Ruta PWA',
-                      subtitle: hasAssignedRoute
-                          ? 'Ver estado sin ruta asignada'
-                          : 'Simular despacho desde PWA',
-                      titleColor: AppColors.textPrimary,
-                      onTap: () => onSelect('toggle_route_assignment'),
-                    ),
-
-                    const Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      child: Divider(height: 1),
-                    ),
-
-                    // Opción 3: Cerrar Sesión
                     _buildMenuActionTile(
                       icon: Icons.logout_rounded,
                       iconBgColor: const Color(0xFFFEE2E2),
@@ -1259,6 +1213,7 @@ class _AnimatedThreeDotsMenuCard extends StatelessWidget {
     );
   }
 
+  /// Construye un elemento interactivo dentro del menú desplegable.
   Widget _buildMenuActionTile({
     required IconData icon,
     required Color iconBgColor,
@@ -1329,11 +1284,15 @@ class _AnimatedThreeDotsMenuCard extends StatelessWidget {
   }
 }
 
-/// Puntero triangular superior que une la card con el botón de los 3 puntos
+/// Pintor personalizado para el triángulo superior de la tarjeta de menú.
 class _MenuTopPointerPainter extends CustomPainter {
+  /// Color de relleno del puntero.
   final Color fillColor;
+
+  /// Color del borde del puntero.
   final Color borderColor;
 
+  /// Crea una nueva instancia de [_MenuTopPointerPainter].
   const _MenuTopPointerPainter({
     required this.fillColor,
     required this.borderColor,
@@ -1371,18 +1330,22 @@ class _MenuTopPointerPainter extends CustomPainter {
       oldDelegate.borderColor != borderColor;
 }
 
-/// Wrapper con ShaderMask para aplicar el barrido luminoso estilo Facebook
+/// Contenedor animado con efecto de barrido luminoso para estados de carga.
 class _FacebookShimmerEffect extends StatefulWidget {
+  /// Widget hijo sobre el cual se proyecta el barrido luminoso.
   final Widget child;
 
+  /// Crea una nueva instancia de [_FacebookShimmerEffect].
   const _FacebookShimmerEffect({required this.child});
 
   @override
   State<_FacebookShimmerEffect> createState() => _FacebookShimmerEffectState();
 }
 
+/// Estado interno de la animación continua de [_FacebookShimmerEffect].
 class _FacebookShimmerEffectState extends State<_FacebookShimmerEffect>
     with SingleTickerProviderStateMixin {
+  /// Controlador de la animación de barrido.
   late final AnimationController _controller;
 
   @override
@@ -1432,6 +1395,7 @@ class _FacebookShimmerEffectState extends State<_FacebookShimmerEffect>
   }
 }
 
+/// Construye un bloque geométrico base para los esqueletos de carga.
 Widget _shimmerBone({
   double? width,
   required double height,
@@ -1444,14 +1408,16 @@ Widget _shimmerBone({
     decoration: BoxDecoration(
       color: Colors.white,
       shape: shape,
-      borderRadius:
-          shape == BoxShape.rectangle ? BorderRadius.circular(borderRadius) : null,
+      borderRadius: shape == BoxShape.rectangle
+          ? BorderRadius.circular(borderRadius)
+          : null,
     ),
   );
 }
 
-/// 1. Grid 2x2 con efecto Shimmer estilo Facebook para las 4 cards del informativo
+/// Cuadrícula 2x2 de esqueletos de carga para las métricas del encabezado.
 class _FacebookShimmerMetricsGrid extends StatelessWidget {
+  /// Crea una nueva instancia de [_FacebookShimmerMetricsGrid].
   const _FacebookShimmerMetricsGrid();
 
   @override
@@ -1501,6 +1467,7 @@ class _FacebookShimmerMetricsGrid extends StatelessWidget {
     );
   }
 
+  /// Construye un esqueleto individual de tarjeta de métrica.
   Widget _buildShimmerMetricCard({
     required double titleWidth,
     required double valueWidth,
@@ -1535,8 +1502,9 @@ class _FacebookShimmerMetricsGrid extends StatelessWidget {
   }
 }
 
-/// 2. Fila de 3 botones de filtro (Todos, Pendientes, Entregados) con efecto Shimmer Facebook
+/// Fila de esqueletos de carga para los botones de filtro.
 class _FacebookShimmerFilterChips extends StatelessWidget {
+  /// Crea una nueva instancia de [_FacebookShimmerFilterChips].
   const _FacebookShimmerFilterChips();
 
   @override
@@ -1555,6 +1523,7 @@ class _FacebookShimmerFilterChips extends StatelessWidget {
     );
   }
 
+  /// Construye un esqueleto de cápsula de filtro.
   Widget _buildShimmerChip({required double width}) {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 11),
@@ -1571,8 +1540,9 @@ class _FacebookShimmerFilterChips extends StatelessWidget {
   }
 }
 
-/// 3. Card de pedido con estructura completa en efecto Shimmer Facebook
+/// Esqueleto de carga para una tarjeta de pedido en la lista principal.
 class _FacebookShimmerOrderCard extends StatelessWidget {
+  /// Crea una nueva instancia de [_FacebookShimmerOrderCard].
   const _FacebookShimmerOrderCard();
 
   @override
@@ -1596,7 +1566,6 @@ class _FacebookShimmerOrderCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Cabecera: Círculo #1 + Badge código + Pill estado
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1615,7 +1584,6 @@ class _FacebookShimmerOrderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            // Fila Cliente + Icono Teléfono
             Row(
               children: [
                 _shimmerBone(width: 18, height: 18, borderRadius: 5),
@@ -1628,7 +1596,6 @@ class _FacebookShimmerOrderCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            // Fila Dirección
             Row(
               children: [
                 _shimmerBone(width: 16, height: 16, borderRadius: 5),
@@ -1639,7 +1606,6 @@ class _FacebookShimmerOrderCard extends StatelessWidget {
             const SizedBox(height: 12),
             const Divider(height: 1),
             const SizedBox(height: 12),
-            // Pie: Monto + Método de pago + Botón de productos
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -1661,8 +1627,9 @@ class _FacebookShimmerOrderCard extends StatelessWidget {
   }
 }
 
-/// 4. Botón flotante "Ver Ruta" con efecto Shimmer Facebook
+/// Esqueleto de carga para el botón flotante de visualización de ruta.
 class _FacebookShimmerFab extends StatelessWidget {
+  /// Crea una nueva instancia de [_FacebookShimmerFab].
   const _FacebookShimmerFab();
 
   @override

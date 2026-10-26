@@ -6,19 +6,30 @@ import '../config/api_config.dart';
 import '../config/routes.dart';
 import '../config/theme.dart';
 
-/// Pantalla de Autenticación para Mensajeros de PulpasPro
+/// Pantalla de autenticación para domiciliarios de DGL Despulpadora.
 class LoginScreen extends StatefulWidget {
+  /// Crea una nueva instancia de [LoginScreen].
   const LoginScreen({super.key});
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
+/// Estado del formulario de autenticación y configuración de servidor en [LoginScreen].
 class _LoginScreenState extends State<LoginScreen> {
+  /// Clave global para validación del formulario de credenciales.
   final _formKey = GlobalKey<FormState>();
-  final _userController = TextEditingController(text: 'MENSAJERO-01');
-  final _passwordController = TextEditingController(text: 'pulpas2026');
+
+  /// Controlador de texto para el nombre de usuario o correo electrónico.
+  final _userController = TextEditingController(text: '');
+
+  /// Controlador de texto para la contraseña del domiciliario.
+  final _passwordController = TextEditingController(text: '');
+
+  /// Indica si la contraseña se muestra oculta en el campo de texto.
   bool _obscurePassword = true;
+
+  /// Indica si se debe persistir la sesión en el dispositivo.
   bool _rememberSession = true;
 
   @override
@@ -28,6 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  /// Valida el formulario e inicia la petición de autenticación en [AuthCubit].
   void _submit() {
     if (_formKey.currentState?.validate() ?? false) {
       context.read<AuthCubit>().login(
@@ -38,6 +50,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  /// Muestra el diálogo modal para ajustar las URLs del servidor REST y WebSocket.
   void _showServerConfigModal() {
     final baseUrlCtrl = TextEditingController(text: ApiConfig.baseUrl);
     final wsUrlCtrl = TextEditingController(text: ApiConfig.wsUrl);
@@ -62,22 +75,33 @@ class _LoginScreenState extends State<LoginScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Configura las IPs del backend y WebSocket según tu entorno:',
+              'Configura los endpoints del backend y WebSocket según tu entorno:',
               style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
             ),
             const SizedBox(height: 14),
-            const Text('URL REST API:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            const Text(
+              'URL REST API:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 4),
             TextFormField(
               controller: baseUrlCtrl,
-              decoration: const InputDecoration(hintText: 'http://192.168.1.50:3000/api'),
+              decoration: const InputDecoration(
+                hintText:
+                    'https://apidevdespulpadora.parking-flow.com/api/mobile',
+              ),
             ),
             const SizedBox(height: 12),
-            const Text('URL WebSocket:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+            const Text(
+              'URL WebSocket:',
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
             const SizedBox(height: 4),
             TextFormField(
               controller: wsUrlCtrl,
-              decoration: const InputDecoration(hintText: 'ws://192.168.1.50:3000/ws'),
+              decoration: const InputDecoration(
+                hintText: 'wss://apidevdespulpadora.parking-flow.com/ws',
+              ),
             ),
           ],
         ),
@@ -87,7 +111,10 @@ class _LoginScreenState extends State<LoginScreen> {
               await ApiConfig.resetDefaults();
               if (ctx.mounted) Navigator.of(ctx).pop();
             },
-            child: const Text('Restablecer', style: TextStyle(color: AppColors.textMuted)),
+            child: const Text(
+              'Restablecer',
+              style: TextStyle(color: AppColors.textMuted),
+            ),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -133,11 +160,15 @@ class _LoginScreenState extends State<LoginScreen> {
           child: SafeArea(
             child: Center(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 420),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 34),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 28,
+                      vertical: 34,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(24),
@@ -156,7 +187,6 @@ class _LoginScreenState extends State<LoginScreen> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Logo Box (Idéntico a .auth-brand-logo de la PWA)
                           Center(
                             child: Container(
                               width: 64,
@@ -165,7 +195,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFECEEF0)),
+                                border:
+                                    Border.all(color: const Color(0xFFECEEF0)),
                                 boxShadow: [
                                   BoxShadow(
                                     color: Colors.black.withValues(alpha: 0.08),
@@ -181,7 +212,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
-
                           Center(
                             child: Text(
                               'DGL DESPULPADORA',
@@ -194,7 +224,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 6),
-
                           Center(
                             child: Text(
                               'DGL Domiciliarios',
@@ -218,10 +247,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                           ),
-
                           const SizedBox(height: 28),
-
-                          // Input Usuario
                           Text(
                             'Usuario o ID de Mensajero',
                             style: GoogleFonts.lato(
@@ -252,11 +278,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                borderSide:
+                                    const BorderSide(color: Color(0xFFE5E7EB)),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                borderSide:
+                                    const BorderSide(color: Color(0xFFE5E7EB)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -267,12 +295,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             validator: (val) =>
-                                val == null || val.trim().isEmpty ? 'Ingresa tu usuario o correo' : null,
+                                val == null || val.trim().isEmpty
+                                    ? 'Ingresa tu usuario o correo'
+                                    : null,
                           ),
-
                           const SizedBox(height: 18),
-
-                          // Input Contraseña
                           Text(
                             'Contraseña',
                             style: GoogleFonts.lato(
@@ -318,11 +345,13 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                               border: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                borderSide:
+                                    const BorderSide(color: Color(0xFFE5E7EB)),
                               ),
                               enabledBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
-                                borderSide: const BorderSide(color: Color(0xFFE5E7EB)),
+                                borderSide:
+                                    const BorderSide(color: Color(0xFFE5E7EB)),
                               ),
                               focusedBorder: OutlineInputBorder(
                                 borderRadius: BorderRadius.circular(12),
@@ -332,13 +361,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                             ),
-                            validator: (val) =>
-                                val == null || val.isEmpty ? 'Ingresa tu contraseña' : null,
+                            validator: (val) => val == null || val.isEmpty
+                                ? 'Ingresa tu contraseña'
+                                : null,
                           ),
-
                           const SizedBox(height: 14),
-
-                          // Remember Session Checkbox
                           Row(
                             children: [
                               SizedBox(
@@ -368,10 +395,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ],
                           ),
-
                           const SizedBox(height: 24),
-
-                          // Botón Iniciar Sesión (Pill / Cápsula igual a PWA)
                           BlocBuilder<AuthCubit, AuthState>(
                             builder: (context, state) {
                               final isLoading = state is AuthLoading;
@@ -381,7 +405,10 @@ class _LoginScreenState extends State<LoginScreen> {
                                   foregroundColor: Colors.white,
                                   elevation: 4,
                                   shadowColor: const Color(0x401B5133),
-                                  padding: const EdgeInsets.symmetric(vertical: 15, horizontal: 20),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 15,
+                                    horizontal: 20,
+                                  ),
                                   shape: const StadiumBorder(),
                                 ),
                                 onPressed: isLoading ? null : _submit,
@@ -395,7 +422,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                         ),
                                       )
                                     : Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Text(
                                             'Iniciar Turno',
@@ -405,29 +433,39 @@ class _LoginScreenState extends State<LoginScreen> {
                                             ),
                                           ),
                                           const SizedBox(width: 8),
-                                          const Icon(Icons.arrow_forward_rounded, size: 18),
+                                          const Icon(
+                                            Icons.arrow_forward_rounded,
+                                            size: 18,
+                                          ),
                                         ],
                                       ),
                               );
                             },
                           ),
-
                           const SizedBox(height: 22),
                           const Divider(color: Color(0xFFE5E7EB), height: 1),
                           const SizedBox(height: 12),
-
-                          // Opciones de Servidor + Pie de tarjeta
                           Center(
                             child: TextButton.icon(
                               style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
                                 minimumSize: Size.zero,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
-                              icon: const Icon(Icons.tune_rounded, size: 15, color: Color(0xFF6B7280)),
+                              icon: const Icon(
+                                Icons.tune_rounded,
+                                size: 15,
+                                color: Color(0xFF6B7280),
+                              ),
                               label: const Text(
                                 'Ajustar Servidor IP',
-                                style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+                                style: TextStyle(
+                                  color: Color(0xFF6B7280),
+                                  fontSize: 12,
+                                ),
                               ),
                               onPressed: _showServerConfigModal,
                             ),

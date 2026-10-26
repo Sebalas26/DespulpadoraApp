@@ -15,37 +15,57 @@ import 'widgets/novelty_dialog.dart';
 import 'widgets/order_items_dialog.dart';
 import 'widgets/osm_map_widget.dart';
 
-/// Pantalla de Enrutado en Vivo del Domiciliario
+/// Pantalla de enrutado en vivo y control secuencial de paradas del domiciliario.
 class CourierRouteMapScreen extends StatefulWidget {
+  /// Crea una nueva instancia de [CourierRouteMapScreen].
   const CourierRouteMapScreen({super.key});
 
   @override
   State<CourierRouteMapScreen> createState() => _CourierRouteMapScreenState();
 }
 
+/// Estado interno de [CourierRouteMapScreen] que administra el mapa activo y las transiciones de entrega.
 class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
+  /// Servicio de geolocalización y cálculo de distancias.
   final LocationService _locationService = LocationService();
+
+  /// Servicio de enrutamiento vial calle por calle.
   final RoutingService _routingService = RoutingService();
 
+  /// Datos consolidados del circuito multiparada completo.
   MultiStopRouteData? _multiRouteData;
+
+  /// Coordenadas de la polilínea del tramo activo hacia la parada enfocada.
   List<LatLng> _activeLegPoints = [];
+
+  /// Información de distancia y tiempo del tramo activo.
   RouteData? _activeLegData;
+
+  /// Indica si se está recalculando la ruta vial.
   bool _isCalculatingRoute = false;
+
+  /// Indica si se está ejecutando una petición de cambio de estado sobre la parada actual.
   bool _isLoadingAction = false;
+
+  /// Indica si el panel inferior muestra la lista completa de paradas o la parada activa.
   bool _showAllStopsList = false;
+
+  /// Contador incremental para activar el acercamiento de cámara estilo navegación.
   int _navigationZoomTrigger = 0;
+
+  /// Firma de caché del último estado de ruta calculado.
   String _lastRouteSignature = '';
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      // Asegurar que al entrar a Enrutado en Vivo apunte a la parada en turno
       context.read<OrdersCubit>().focusCurrentTurnStop();
       _recalculateFullRoute(force: true);
     });
   }
 
+  /// Formatea un valor numérico en moneda colombiana (COP).
   String _formatCop(double value) {
     final fmt = NumberFormat.currency(
       locale: 'es_CO',
@@ -55,6 +75,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     return fmt.format(value);
   }
 
+  /// Garantiza que la coordenada del domiciliario sea válida dentro del área operativa.
   LatLng _resolveCourierLocation(LatLng? rawLoc) {
     if (rawLoc != null &&
         LocationService.isWithinColombia(rawLoc.latitude, rawLoc.longitude)) {
@@ -63,90 +84,109 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     return LocationService.defaultLocation;
   }
 
+  /// Recalcula el circuito multiparada y el tramo activo hacia la parada seleccionada.
   Future<void> _recalculateFullRoute({bool force = false}) async {
     if (_isCalculatingRoute) return;
 
-    final ordersState = context.read<OrdersCubit>().state;
-    final trackState = context.read<TrackingCubit>().state;
-    final courierLoc = _resolveCourierLocation(trackState.currentLocation);
-    final activeStop = ordersState.activeOrder;
+    try {
+      final ordersState = context.read<OrdersCubit>().state;
+      final trackState = context.read<TrackingCubit>().state;
+      final courierLoc = _resolveCourierLocation(trackState.currentLocation);
+      final activeStop = ordersState.activeOrder;
 
-    final pendingStops = ordersState.orders
-        .where((o) =>
-            o.estado != OrderStatus.entregado && o.estado != OrderStatus.novedad)
-        .toList();
+      final pendingStops = ordersState.orders
+          .where((o) =>
+              o.estado != OrderStatus.entregado &&
+              o.estado != OrderStatus.novedad)
+          .toList();
 
-    final signature =
-        '${courierLoc.latitude.toStringAsFixed(3)},${courierLoc.longitude.toStringAsFixed(3)}_'
-        '${activeStop?.id ?? "none"}_'
-        '${ordersState.orders.map((o) => "${o.id}:${o.estado.name}").join("|")}';
+      final signature =
+          '${courierLoc.latitude.toStringAsFixed(3)},${courierLoc.longitude.toStringAsFixed(3)}_'
+          '${activeStop?.id ?? "none"}_'
+          '${ordersState.orders.map((o) => "${o.id}:${o.estado.name}").join("|")}';
 
-    if (!force && signature == _lastRouteSignature && _multiRouteData != null) {
-      return;
-    }
+      if (!force &&
+          signature == _lastRouteSignature &&
+          _multiRouteData != null) {
+        return;
+      }
 
-    _isCalculatingRoute = true;
-    _lastRouteSignature = signature;
+      _isCalculatingRoute = true;
+      _lastRouteSignature = signature;
 
-    // Construir secuencia de waypoints: Mensajero -> Paradas pendientes en orden
-    final List<LatLng> waypoints = [
-      courierLoc,
-      ...(pendingStops.isNotEmpty
-          ? pendingStops.map((s) => LatLng(s.latitud, s.longitud))
-          : ordersState.orders.map((s) => LatLng(s.latitud, s.longitud))),
-    ];
+      final List<LatLng> waypoints = [
+        courierLoc,
+        ...(pendingStops.isNotEmpty
+            ? pendingStops.map((s) => LatLng(s.latitud, s.longitud))
+            : ordersState.orders.map((s) => LatLng(s.latitud, s.longitud))),
+      ];
 
-    final multiRoute = await _routingService.getMultiStopRoute(
-      waypoints: waypoints,
-    );
-
-    RouteData? legData;
-    if (activeStop != null) {
-      legData = await _routingService.getRoute(
-        start: courierLoc,
-        end: LatLng(activeStop.latitud, activeStop.longitud),
+      final multiRoute = await _routingService.getMultiStopRoute(
+        waypoints: waypoints,
       );
-    }
 
-    if (mounted) {
-      setState(() {
-        _multiRouteData = multiRoute;
-        _activeLegData = legData;
-        _activeLegPoints = legData?.points ?? [];
-        _isCalculatingRoute = false;
-      });
+      RouteData? legData;
+      if (activeStop != null) {
+        legData = await _routingService.getRoute(
+          start: courierLoc,
+          end: LatLng(activeStop.latitud, activeStop.longitud),
+        );
+      }
+
+      if (mounted) {
+        setState(() {
+          _multiRouteData = multiRoute;
+          _activeLegData = legData;
+          _activeLegPoints = legData?.points ?? [];
+          _isCalculatingRoute = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isCalculatingRoute = false);
+      }
     }
   }
 
+  /// Inicia una llamada telefónica al número del cliente.
   Future<void> _makePhoneCall(String phone) async {
-    final cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
-    final uri = Uri.parse('tel:$cleanPhone');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri);
-    }
+    try {
+      final cleanPhone = phone.replaceAll(RegExp(r'[^0-9+]'), '');
+      if (cleanPhone.isEmpty) return;
+      final uri = Uri.parse('tel:$cleanPhone');
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+      }
+    } catch (_) {}
   }
 
+  /// Abre una conversación de WhatsApp con el cliente destinatario del pedido.
   Future<void> _openWhatsApp(OrderModel order) async {
-    final courierName =
-        context.read<AuthCubit>().currentCourier?.nombre ?? 'tu mensajero';
-    final cleanPhone = order.clienteTelefono.replaceAll(RegExp(r'[^0-9]'), '');
-    final targetPhone = cleanPhone.startsWith('57')
-        ? cleanPhone
-        : cleanPhone.startsWith('3')
-            ? '57$cleanPhone'
-            : cleanPhone;
+    try {
+      final courierName =
+          context.read<AuthCubit>().currentCourier?.nombre ?? '';
+      final cleanPhone =
+          order.clienteTelefono.replaceAll(RegExp(r'[^0-9]'), '');
+      if (cleanPhone.isEmpty) return;
+      final targetPhone = cleanPhone.startsWith('57')
+          ? cleanPhone
+          : cleanPhone.startsWith('3')
+              ? '57$cleanPhone'
+              : cleanPhone;
 
-    final message = Uri.encodeComponent(
-      'Hola ${order.clienteNombre}, te saluda $courierName de *PulpasPro*. '
-      'Voy en ruta con tu pedido *${order.id}* hacia ${order.direccion}.',
-    );
+      final message = Uri.encodeComponent(
+        'Hola ${order.clienteNombre}, te saluda $courierName. '
+        'Voy en ruta con tu pedido *${order.id}* hacia ${order.direccion}.',
+      );
 
-    final waUri = Uri.parse('https://wa.me/$targetPhone?text=$message');
-    if (await canLaunchUrl(waUri)) {
-      await launchUrl(waUri, mode: LaunchMode.externalApplication);
-    }
+      final waUri = Uri.parse('https://wa.me/$targetPhone?text=$message');
+      if (await canLaunchUrl(waUri)) {
+        await launchUrl(waUri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {}
   }
 
+  /// Muestra la hoja inferior para abrir la ubicación en Waze o Google Maps.
   void _showExternalNavigationSheet(OrderModel order) {
     showModalBottomSheet(
       context: context,
@@ -198,15 +238,17 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                 subtitle: const Text('Tráfico en vivo y alertas viales'),
                 onTap: () async {
                   Navigator.of(ctx).pop();
-                  final wazeUri = Uri.parse(
-                    'https://waze.com/ul?ll=${order.latitud},${order.longitud}&navigate=yes',
-                  );
-                  if (await canLaunchUrl(wazeUri)) {
-                    await launchUrl(
-                      wazeUri,
-                      mode: LaunchMode.externalApplication,
+                  try {
+                    final wazeUri = Uri.parse(
+                      'https://waze.com/ul?ll=${order.latitud},${order.longitud}&navigate=yes',
                     );
-                  }
+                    if (await canLaunchUrl(wazeUri)) {
+                      await launchUrl(
+                        wazeUri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  } catch (_) {}
                 },
               ),
               const Divider(),
@@ -230,15 +272,17 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                 subtitle: const Text('Ruta paso a paso con voz'),
                 onTap: () async {
                   Navigator.of(ctx).pop();
-                  final gmapsUri = Uri.parse(
-                    'https://www.google.com/maps/dir/?api=1&destination=${order.latitud},${order.longitud}',
-                  );
-                  if (await canLaunchUrl(gmapsUri)) {
-                    await launchUrl(
-                      gmapsUri,
-                      mode: LaunchMode.externalApplication,
+                  try {
+                    final gmapsUri = Uri.parse(
+                      'https://www.google.com/maps/dir/?api=1&destination=${order.latitud},${order.longitud}',
                     );
-                  }
+                    if (await canLaunchUrl(gmapsUri)) {
+                      await launchUrl(
+                        gmapsUri,
+                        mode: LaunchMode.externalApplication,
+                      );
+                    }
+                  } catch (_) {}
                 },
               ),
             ],
@@ -248,28 +292,39 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     );
   }
 
+  /// Inicia el tramo activo hacia la parada en turno.
   Future<void> _handleStartLeg(OrderModel order) async {
     setState(() => _isLoadingAction = true);
-    final token = context.read<AuthCubit>().currentCourier?.token;
-    await context.read<OrdersCubit>().startRoute(order.id, token: token);
-    if (mounted) {
-      setState(() {
-        _isLoadingAction = false;
-        _navigationZoomTrigger++;
-      });
-      _recalculateFullRoute(force: true);
+    try {
+      final token = context.read<AuthCubit>().currentCourier?.token;
+      await context.read<OrdersCubit>().startRoute(order.id, token: token);
+      if (mounted) {
+        setState(() {
+          _isLoadingAction = false;
+          _navigationZoomTrigger++;
+        });
+        _recalculateFullRoute(force: true);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingAction = false);
+      }
     }
   }
 
+  /// Registra la llegada del domiciliario al punto de entrega actual.
   Future<void> _handleArrivedAtStop(OrderModel order) async {
     setState(() => _isLoadingAction = true);
-    final token = context.read<AuthCubit>().currentCourier?.token;
-    await context.read<OrdersCubit>().arrivedAtPoint(order.id, token: token);
+    try {
+      final token = context.read<AuthCubit>().currentCourier?.token;
+      await context.read<OrdersCubit>().arrivedAtPoint(order.id, token: token);
+    } catch (_) {}
     if (mounted) {
       setState(() => _isLoadingAction = false);
     }
   }
 
+  /// Abre el diálogo de confirmación de entrega y recaudo.
   void _openConfirmDeliveryDialog(OrderModel order) {
     showDialog(
       context: context,
@@ -277,35 +332,43 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
         order: order,
         onConfirm: (cashReceived, receiverName, notes, paymentMethod) async {
           setState(() => _isLoadingAction = true);
-          final token = context.read<AuthCubit>().currentCourier?.token;
-          await context.read<OrdersCubit>().confirmDelivery(
-                order.id,
-                token: token,
-                cashReceived: cashReceived,
-                paymentMethod: paymentMethod,
-                receiverName: receiverName,
-                notes: notes,
-              );
-          if (mounted) {
-            setState(() => _isLoadingAction = false);
-            _recalculateFullRoute(force: true);
-            final nextTurn = context.read<OrdersCubit>().state.currentTurnOrder;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  nextTurn != null
-                      ? '¡Entrega confirmada ($paymentMethod)! Siguiente parada habilitada: ${nextTurn.clienteNombre}'
-                      : '¡Excelente! Has completado todas las entregas de la ruta.',
+          try {
+            final token = context.read<AuthCubit>().currentCourier?.token;
+            await context.read<OrdersCubit>().confirmDelivery(
+                  order.id,
+                  token: token,
+                  cashReceived: cashReceived,
+                  paymentMethod: paymentMethod,
+                  receiverName: receiverName,
+                  notes: notes,
+                );
+            if (mounted) {
+              setState(() => _isLoadingAction = false);
+              _recalculateFullRoute(force: true);
+              final nextTurn =
+                  context.read<OrdersCubit>().state.currentTurnOrder;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    nextTurn != null
+                        ? '¡Entrega confirmada ($paymentMethod)! Siguiente parada habilitada: ${nextTurn.clienteNombre}'
+                        : '¡Excelente! Has completado todas las entregas de la ruta.',
+                  ),
+                  backgroundColor: AppColors.primary,
                 ),
-                backgroundColor: AppColors.primary,
-              ),
-            );
+              );
+            }
+          } catch (_) {
+            if (mounted) {
+              setState(() => _isLoadingAction = false);
+            }
           }
         },
       ),
     );
   }
 
+  /// Abre el diálogo para reportar una novedad de entrega en la parada actual.
   void _openNoveltyDialog(OrderModel order) {
     showDialog(
       context: context,
@@ -313,25 +376,32 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
         order: order,
         onReport: (reason) async {
           setState(() => _isLoadingAction = true);
-          final token = context.read<AuthCubit>().currentCourier?.token;
-          await context.read<OrdersCubit>().reportNovelty(
-                order.id,
-                reason,
-                token: token,
-              );
-          if (mounted) {
-            setState(() => _isLoadingAction = false);
-            _recalculateFullRoute(force: true);
-            final nextTurn = context.read<OrdersCubit>().state.currentTurnOrder;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  nextTurn != null
-                      ? 'Novedad registrada. Siguiente parada habilitada: ${nextTurn.clienteNombre}'
-                      : 'Ruta finalizada.',
+          try {
+            final token = context.read<AuthCubit>().currentCourier?.token;
+            await context.read<OrdersCubit>().reportNovelty(
+                  order.id,
+                  reason,
+                  token: token,
+                );
+            if (mounted) {
+              setState(() => _isLoadingAction = false);
+              _recalculateFullRoute(force: true);
+              final nextTurn =
+                  context.read<OrdersCubit>().state.currentTurnOrder;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    nextTurn != null
+                        ? 'Novedad registrada. Siguiente parada habilitada: ${nextTurn.clienteNombre}'
+                        : 'Ruta finalizada.',
+                  ),
                 ),
-              ),
-            );
+              );
+            }
+          } catch (_) {
+            if (mounted) {
+              setState(() => _isLoadingAction = false);
+            }
           }
         },
       ),
@@ -341,6 +411,10 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
   @override
   Widget build(BuildContext context) {
     final courier = context.watch<AuthCubit>().currentCourier;
+    final plateDisplay =
+        (courier != null && courier.placaVehiculo.trim().isNotEmpty)
+            ? courier.placaVehiculo.trim()
+            : 'Sin placa';
 
     return Scaffold(
       appBar: AppBar(
@@ -366,7 +440,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ],
             ),
             Text(
-              'Ruta ${courier?.placaVehiculo.split(" ").first ?? "XYZ-789"}',
+              'Ruta ${plateDisplay.split(" ").first}',
               style: const TextStyle(
                 fontSize: 11.5,
                 color: AppColors.textSecondary,
@@ -404,10 +478,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
 
               return Column(
                 children: [
-                  // 1. Barra Superior de Telemetría
                   _buildPwaTelemetryHeader(ordersState),
-
-                  // 2. Lienzo del Mapa Limpio (Sin pills superiores ni botón Cava Matriz ni Optimizar)
                   Expanded(
                     flex: _showAllStopsList ? 5 : 6,
                     child: OsmMapWidget(
@@ -415,7 +486,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                       destinationLocation: destLatLng,
                       destinationTitle:
                           activeOrder?.clienteNombre ?? 'Punto de Entrega',
-                      courierPlate: courier?.placaVehiculo ?? 'XYZ-789',
+                      courierPlate: plateDisplay,
                       heading: trackState.heading,
                       showPlantaMatriz: false,
                       isNavigationMode: true,
@@ -431,8 +502,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                       },
                     ),
                   ),
-
-                  // 3. Panel Inferior de Secuencia de Enrutado y Control Secuencial Estricto
                   Expanded(
                     flex: _showAllStopsList ? 6 : 4,
                     child: _buildBottomRoutePanel(
@@ -452,7 +521,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     );
   }
 
-  /// Barra de telemetría superior
+  /// Construye la barra superior de indicadores de progreso, distancia y recaudo.
   Widget _buildPwaTelemetryHeader(OrdersState state) {
     final totalDist =
         _multiRouteData?.totalDistanceFormatted ?? 'Calculando...';
@@ -468,7 +537,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       ),
       child: Row(
         children: [
-          // 1. Progreso de Entregas
           Expanded(
             child: _buildTelemetryPill(
               icon: Icons.inventory_2_outlined,
@@ -479,7 +547,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          // 2. Distancia y Tiempo del Enrutado Completo
           Expanded(
             child: _buildTelemetryPill(
               icon: Icons.route_rounded,
@@ -491,7 +558,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
             ),
           ),
           const SizedBox(width: 8),
-          // 3. Recaudo en Calle
           Expanded(
             child: _buildTelemetryPill(
               icon: Icons.payments_outlined,
@@ -506,6 +572,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     );
   }
 
+  /// Construye una píldora de métrica compacta para la barra superior del mapa.
   Widget _buildTelemetryPill({
     required IconData icon,
     required Color iconBg,
@@ -562,7 +629,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     );
   }
 
-  /// Panel inferior limpio (sin la tira horizontal de botones que se marcó con X)
+  /// Construye el panel inferior con el detalle de la parada activa o el listado secuencial completo.
   Widget _buildBottomRoutePanel({
     required OrdersState ordersState,
     required OrderModel? activeOrder,
@@ -585,7 +652,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       ),
       child: Column(
         children: [
-          // Cabecera del Drawer: Título + Botón Ver Lista Completa
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: const BoxDecoration(
@@ -661,8 +727,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ],
             ),
           ),
-
-          // Contenido del Panel: Lista Completa del Enrutado o Tarjeta de Parada Activa
           Expanded(
             child: _showAllStopsList
                 ? _buildFullSequenceListView(ordersState, activeOrder)
@@ -684,7 +748,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     );
   }
 
-  /// Vista enfocada en la parada seleccionada con bloqueo secuencial para paradas posteriores
+  /// Construye la tarjeta detallada de la parada seleccionada con validación de bloqueo secuencial.
   Widget _buildActiveStopFocusedCard({
     required OrdersState ordersState,
     required OrderModel order,
@@ -704,7 +768,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Fila 1: Badge Parada #X + Estado + Monto
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -760,10 +823,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 8),
-
-          // Nombre del Cliente y Dirección
           Text(
             order.clienteNombre,
             style: const TextStyle(
@@ -797,10 +857,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // Botones rápidos: Llamar, WhatsApp, Waze/Maps, Detalle
           Row(
             children: [
               Expanded(
@@ -846,10 +903,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ),
             ],
           ),
-
           const SizedBox(height: 10),
-
-          // Botón de acción secuencial (o bloqueo si no es la parada en turno)
           _buildDirectRouteStepButton(
             order: order,
             stopIndex: stopIndex,
@@ -862,6 +916,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     );
   }
 
+  /// Construye un botón de acción rápida para contacto o navegación externa.
   Widget _buildQuickActionChip({
     required IconData icon,
     required String label,
@@ -897,6 +952,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     );
   }
 
+  /// Construye el botón principal de progresión de entrega o el aviso de bloqueo secuencial.
   Widget _buildDirectRouteStepButton({
     required OrderModel order,
     required int stopIndex,
@@ -971,7 +1027,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       );
     }
 
-    // BLOQUEO SECUENCIAL ESTRICTO: Si intenta entregar la 2da, 3ra, 4ta parada sin finalizar la que está en curso
     if (!isUnlocked && turnOrder != null) {
       return Container(
         width: double.infinity,
@@ -1118,7 +1173,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     }
   }
 
-  /// Lista completa de todas las paradas en orden de enrutamiento
+  /// Construye la lista completa de todas las paradas de la ruta en orden secuencial.
   Widget _buildFullSequenceListView(
     OrdersState ordersState,
     OrderModel? activeOrder,
@@ -1156,7 +1211,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
             ),
             child: Row(
               children: [
-                // Círculo de secuencia (#1, #2, #3...)
                 Container(
                   width: 30,
                   height: 30,
@@ -1190,7 +1244,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   ),
                 ),
                 const SizedBox(width: 10),
-                // Datos de la parada
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1244,7 +1297,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Valor y Estado
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [

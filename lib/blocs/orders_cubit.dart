@@ -2,23 +2,69 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
 
-enum OrdersFilter { todos, pendientes, entregados }
+/// Categorías de filtrado de pedidos en la pantalla principal.
+enum OrdersFilter {
+  /// Muestra todos los pedidos asignados a la ruta.
+  todos,
 
-enum OrdersLoadingStatus { initial, loading, success, error }
+  /// Muestra únicamente los pedidos pendientes de entrega.
+  pendientes,
 
+  /// Muestra únicamente los pedidos ya entregados.
+  entregados,
+}
+
+/// Estados de carga de las operaciones de pedidos.
+enum OrdersLoadingStatus {
+  /// Estado inicial sin carga previa.
+  initial,
+
+  /// Petición en curso hacia el servidor.
+  loading,
+
+  /// Datos sincronizados exitosamente.
+  success,
+
+  /// Error al consultar o actualizar pedidos.
+  error,
+}
+
+/// Estado inmutable que contiene los pedidos, métricas y progreso de la ruta del domiciliario.
 class OrdersState {
+  /// Estado actual de carga de la información.
   final OrdersLoadingStatus status;
+
+  /// Lista completa de pedidos asignados en orden secuencial.
   final List<OrderModel> orders;
+
+  /// Filtro activo seleccionado por el usuario.
   final OrdersFilter filter;
+
+  /// Identificador visible de la parada actualmente seleccionada o en curso.
   final String? activeOrderId;
+
+  /// Indica si el recorrido activo en calle se encuentra en ejecución.
   final bool isRouteActive;
+
+  /// Indica si el domiciliario tiene una ruta asignada desde el sistema central.
   final bool hasAssignedRoute;
+
+  /// Indica si el domiciliario confirmó la recepción física del cargue.
   final bool isRouteReceived;
+
+  /// Marca de tiempo de la fotografía de recepción de ruta.
   final String? receptionPhotoTime;
+
+  /// Código identificador de la ruta asignada.
   final String assignedRouteCode;
+
+  /// Zona o sector geográfico de la ruta asignada.
   final String assignedRouteZone;
+
+  /// Mensaje de error en caso de fallo de comunicación.
   final String? errorMessage;
 
+  /// Crea una nueva instancia de [OrdersState].
   const OrdersState({
     this.status = OrdersLoadingStatus.initial,
     this.orders = const [],
@@ -28,23 +74,27 @@ class OrdersState {
     this.hasAssignedRoute = false,
     this.isRouteReceived = false,
     this.receptionPhotoTime,
-    this.assignedRouteCode = 'RUT-2026-01',
-    this.assignedRouteZone = 'Chapinero • Zona Norte',
+    this.assignedRouteCode = '',
+    this.assignedRouteZone = '',
     this.errorMessage,
   });
 
-  // Métricas para el Dashboard
+  /// Número total de pedidos en la ruta actual.
   int get totalCount => orders.length;
 
+  /// Suma total de unidades de producto en todos los pedidos de la ruta.
   int get totalUnitsInRoute =>
       orders.fold(0, (sum, o) => sum + o.totalUnidades);
 
+  /// Valor monetario total de todos los pedidos de la ruta.
   double get totalRouteAmount =>
       orders.fold(0.0, (sum, o) => sum + o.montoTotal);
 
+  /// Cantidad de pedidos que ya fueron entregados.
   int get deliveredCount =>
       orders.where((o) => o.estado == OrderStatus.entregado).length;
 
+  /// Cantidad de pedidos pendientes por gestionar.
   int get pendingCount => orders
       .where((o) =>
           o.estado == OrderStatus.asignado ||
@@ -52,6 +102,7 @@ class OrdersState {
           o.estado == OrderStatus.enPunto)
       .length;
 
+  /// Monto total pendiente por recaudar en efectivo.
   double get totalCashToCollect => orders
       .where((o) =>
           o.requiereCobro &&
@@ -59,10 +110,12 @@ class OrdersState {
           o.estado != OrderStatus.novedad)
       .fold(0.0, (sum, o) => sum + o.montoTotal);
 
+  /// Monto total ya recaudado en los pedidos entregados.
   double get totalCashCollected => orders
       .where((o) => o.estado == OrderStatus.entregado)
       .fold(0.0, (sum, o) => sum + o.montoTotal);
 
+  /// Lista de pedidos filtrada según la pestaña activa en el panel principal.
   List<OrderModel> get filteredOrders {
     switch (filter) {
       case OrdersFilter.pendientes:
@@ -79,15 +132,13 @@ class OrdersState {
     }
   }
 
-  /// Retorna el índice 1-based de la parada dentro del enrutado total
+  /// Retorna el número de secuencia 1-based de una parada dentro de la ruta.
   int getStopSequenceNumber(String orderId) {
     final idx = orders.indexWhere((o) => o.id == orderId);
     return idx >= 0 ? idx + 1 : 1;
   }
 
-  /// Primera parada pendiente en estricto orden secuencial (#1 -> #2 -> #3 -> #4).
-  /// No se permite entregar ni avanzar la 2da, 3ra o 4ta parada sin haber confirmado
-  /// (Entregado o Novedad) la que está actualmente en turno.
+  /// Retorna la primera parada pendiente en estricto orden secuencial.
   OrderModel? get currentTurnOrder {
     for (final order in orders) {
       if (order.estado != OrderStatus.entregado &&
@@ -98,13 +149,14 @@ class OrdersState {
     return null;
   }
 
-  /// Indica si una parada específica está habilitada para gestionarse/entregarse
+  /// Indica si una parada específica se encuentra desbloqueada para gestión inmediata.
   bool isOrderUnlocked(String orderId) {
     final turn = currentTurnOrder;
     if (turn == null) return false;
-    return turn.id == orderId;
+    return turn.id == orderId || turn.apiOrderId == orderId;
   }
 
+  /// Retorna el pedido actualmente enfocado en el mapa o el pedido en turno.
   OrderModel? get activeOrder {
     if (activeOrderId != null) {
       try {
@@ -114,6 +166,7 @@ class OrdersState {
     return currentTurnOrder ?? (orders.isNotEmpty ? orders.last : null);
   }
 
+  /// Crea una copia de [OrdersState] actualizando las propiedades especificadas.
   OrdersState copyWith({
     OrdersLoadingStatus? status,
     List<OrderModel>? orders,
@@ -143,43 +196,71 @@ class OrdersState {
   }
 }
 
-/// Cubit para gestionar el ciclo de vida secuencial de los pedidos asignados
+/// Cubit encargado de gestionar el ciclo de vida secuencial de la ruta y entregas del domiciliario.
 class OrdersCubit extends Cubit<OrdersState> {
+  /// Servicio de comunicación HTTP con el backend.
   final ApiService _apiService;
 
+  /// Último identificador de domiciliario utilizado en la carga de ruta.
+  String? _lastCourierId;
+
+  /// Último token JWT utilizado en las peticiones autenticadas.
+  String? _lastToken;
+
+  /// Crea una instancia de [OrdersCubit] con inyección opcional de [ApiService].
   OrdersCubit({ApiService? apiService})
       : _apiService = apiService ?? ApiService(),
         super(const OrdersState());
 
-  /// Carga los pedidos asignados
+  /// Consulta la ruta y los pedidos asignados al domiciliario desde `/api/mobile/orders/assigned`.
   Future<void> loadOrders({required String courierId, String? token}) async {
+    _lastCourierId = courierId;
+    _lastToken = token ?? _lastToken;
     emit(state.copyWith(status: OrdersLoadingStatus.loading));
     try {
-      final orders = await _apiService.fetchAssignedOrders(
+      final routeResponse = await _apiService.fetchAssignedRoute(
         courierId: courierId,
-        token: token,
+        token: _lastToken,
       );
+      final orders = routeResponse.orders;
 
-      // La parada activa por defecto es siempre la primera pendiente en orden secuencial
       String? turnId;
       bool routeAlreadyActive = state.isRouteActive;
+      bool anyProgress = false;
       for (final o in orders) {
-        if (o.estado != OrderStatus.entregado &&
+        if (o.estado != OrderStatus.asignado) {
+          anyProgress = true;
+        }
+        if (turnId == null &&
+            o.estado != OrderStatus.entregado &&
             o.estado != OrderStatus.novedad) {
           turnId = o.id;
           if (o.estado == OrderStatus.enCamino ||
               o.estado == OrderStatus.enPunto) {
             routeAlreadyActive = true;
           }
-          break;
         }
       }
+
+      final hasRoute = routeResponse.hasAssignedRoute || orders.isNotEmpty;
+      final isReceived = hasRoute &&
+          (routeResponse.isRouteReceived ||
+              state.isRouteReceived ||
+              anyProgress);
 
       emit(state.copyWith(
         status: OrdersLoadingStatus.success,
         orders: orders,
         activeOrderId: turnId ?? (orders.isNotEmpty ? orders.first.id : null),
-        isRouteActive: routeAlreadyActive,
+        isRouteActive: hasRoute ? routeAlreadyActive : false,
+        hasAssignedRoute: hasRoute,
+        isRouteReceived: isReceived,
+        assignedRouteCode: routeResponse.assignedRouteCode.isNotEmpty
+            ? routeResponse.assignedRouteCode
+            : state.assignedRouteCode,
+        assignedRouteZone: routeResponse.assignedRouteZone.isNotEmpty
+            ? routeResponse.assignedRouteZone
+            : state.assignedRouteZone,
       ));
     } catch (e) {
       emit(state.copyWith(
@@ -189,12 +270,12 @@ class OrdersCubit extends Cubit<OrdersState> {
     }
   }
 
-  /// Cambia el filtro de la lista
+  /// Actualiza el filtro de visualización de la lista de pedidos.
   void setFilter(OrdersFilter filter) {
     emit(state.copyWith(filter: filter));
   }
 
-  /// Activa o desactiva la asignación de ruta enviada desde la PWA
+  /// Establece el estado de asignación de ruta recibido desde el servidor.
   void setRouteAssignment(
     bool assigned, {
     bool received = false,
@@ -210,21 +291,42 @@ class OrdersCubit extends Cubit<OrdersState> {
     ));
   }
 
-  /// Confirma la recepción física del pedido de la ruta con evidencia fotográfica
-  void confirmRouteReception({required String photoTimestamp}) {
-    emit(state.copyWith(
-      hasAssignedRoute: true,
-      isRouteReceived: true,
-      receptionPhotoTime: photoTimestamp,
-    ));
+  /// Confirma la recepción física del cargue en planta y notifica al backend.
+  Future<bool> confirmRouteReception({
+    required String photoTimestamp,
+    String? courierId,
+    String? token,
+  }) async {
+    try {
+      final effectiveCourierId = courierId ?? _lastCourierId ?? '';
+      final effectiveToken = token ?? _lastToken;
+      if (effectiveCourierId.isNotEmpty) {
+        await _apiService.confirmRouteReception(
+          courierId: effectiveCourierId,
+          routeCode: state.assignedRouteCode.isNotEmpty
+              ? state.assignedRouteCode
+              : null,
+          photoTimestamp: photoTimestamp,
+          token: effectiveToken,
+        );
+      }
+      emit(state.copyWith(
+        hasAssignedRoute: true,
+        isRouteReceived: true,
+        receptionPhotoTime: photoTimestamp,
+      ));
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  /// Selecciona una parada en el mapa para visualizar su información
+  /// Selecciona una parada específica para enfocarla en el mapa.
   void selectStop(String orderId) {
     emit(state.copyWith(activeOrderId: orderId));
   }
 
-  /// Enfoca directamente la parada en turno actual
+  /// Enfoca automáticamente la parada que se encuentra en turno actual.
   void focusCurrentTurnStop() {
     final turn = state.currentTurnOrder;
     if (turn != null) {
@@ -232,7 +334,7 @@ class OrdersCubit extends Cubit<OrdersState> {
     }
   }
 
-  /// Inicia el enrutado en vivo del domiciliario (activa estrictamente la parada en turno)
+  /// Inicia el recorrido completo del domiciliario activando la primera parada en turno.
   Future<OrderModel?> startFullCourierRoute({String? token}) async {
     if (state.orders.isEmpty) return null;
 
@@ -258,19 +360,19 @@ class OrdersCubit extends Cubit<OrdersState> {
     return updatedActive;
   }
 
-  /// 1. Iniciar Ruta / En Camino (solo permitido para la parada en turno)
+  /// Cambia el estado de la parada en turno a [OrderStatus.enCamino].
   Future<bool> startRoute(String orderId, {String? token}) async {
     if (!state.isOrderUnlocked(orderId)) return false;
     return _updateStatusTransition(orderId, OrderStatus.enCamino, token: token);
   }
 
-  /// 2. Llegué al Punto (solo permitido para la parada en turno)
+  /// Cambia el estado de la parada en turno a [OrderStatus.enPunto].
   Future<bool> arrivedAtPoint(String orderId, {String? token}) async {
     if (!state.isOrderUnlocked(orderId)) return false;
     return _updateStatusTransition(orderId, OrderStatus.enPunto, token: token);
   }
 
-  /// 3. Confirmar Entrega y Cobro (solo permitido para la parada en turno)
+  /// Confirma la entrega y recaudo de la parada en turno ante el backend.
   Future<bool> confirmDelivery(
     String orderId, {
     String? token,
@@ -280,7 +382,7 @@ class OrdersCubit extends Cubit<OrdersState> {
     String? receiverName,
   }) async {
     if (!state.isOrderUnlocked(orderId)) return false;
-    final success = await _updateStatusTransition(
+    return _updateStatusTransition(
       orderId,
       OrderStatus.entregado,
       token: token,
@@ -292,10 +394,9 @@ class OrdersCubit extends Cubit<OrdersState> {
         'receiverName': receiverName,
       },
     );
-    return success;
   }
 
-  /// 4. Reportar Novedad / No Entregado (solo permitido para la parada en turno)
+  /// Reporta una novedad en la parada en turno y avanza a la siguiente parada secuencial.
   Future<bool> reportNovelty(
     String orderId,
     String reason, {
@@ -303,14 +404,18 @@ class OrdersCubit extends Cubit<OrdersState> {
   }) async {
     if (!state.isOrderUnlocked(orderId)) return false;
     try {
-      await _apiService.reportNovelty(
-        orderId: orderId,
+      final targetOrder = _findOrderById(orderId);
+      final apiId = targetOrder?.apiOrderId ?? orderId;
+
+      final success = await _apiService.reportNovelty(
+        orderId: apiId,
         reason: reason,
-        token: token,
+        token: token ?? _lastToken,
       );
+      if (!success) return false;
 
       final updatedOrders = state.orders.map((o) {
-        if (o.id == orderId) {
+        if (o.id == orderId || o.apiOrderId == orderId) {
           return o.copyWith(
             estado: OrderStatus.novedad,
             observacionesNovedad: reason,
@@ -326,11 +431,22 @@ class OrdersCubit extends Cubit<OrdersState> {
         activeOrderId: nextActiveId,
       ));
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
+  /// Busca un pedido en el estado actual por su código visible o su ID numérico de base de datos.
+  OrderModel? _findOrderById(String orderId) {
+    for (final o in state.orders) {
+      if (o.id == orderId || o.apiOrderId == orderId) {
+        return o;
+      }
+    }
+    return null;
+  }
+
+  /// Obtiene el identificador de la siguiente parada pendiente en orden secuencial.
   String? _findNextSequentialOrderId(List<OrderModel> ordersList) {
     for (final o in ordersList) {
       if (o.estado != OrderStatus.entregado &&
@@ -341,6 +457,7 @@ class OrdersCubit extends Cubit<OrdersState> {
     return ordersList.isNotEmpty ? ordersList.last.id : null;
   }
 
+  /// Ejecuta la transición de estado de un pedido sincronizándola con la API REST.
   Future<bool> _updateStatusTransition(
     String orderId,
     OrderStatus newStatus, {
@@ -349,15 +466,19 @@ class OrdersCubit extends Cubit<OrdersState> {
     Map<String, dynamic>? extraData,
   }) async {
     try {
-      await _apiService.updateOrderStatus(
-        orderId: orderId,
+      final targetOrder = _findOrderById(orderId);
+      final apiId = targetOrder?.apiOrderId ?? orderId;
+
+      final success = await _apiService.updateOrderStatus(
+        orderId: apiId,
         newStatus: newStatus,
-        token: token,
+        token: token ?? _lastToken,
         extraData: extraData,
       );
+      if (!success) return false;
 
       List<OrderModel> updatedOrders = state.orders.map((o) {
-        if (o.id == orderId) {
+        if (o.id == orderId || o.apiOrderId == orderId) {
           return o.copyWith(
             estado: newStatus,
             metodoPago: paymentMethod ?? o.metodoPago,
@@ -366,16 +487,15 @@ class OrdersCubit extends Cubit<OrdersState> {
         return o;
       }).toList();
 
-      String? activeId = orderId;
+      String? activeId = targetOrder?.id ?? orderId;
       bool routeActive = state.isRouteActive;
 
       if (newStatus == OrderStatus.enCamino ||
           newStatus == OrderStatus.enPunto) {
-        activeId = orderId;
+        activeId = targetOrder?.id ?? orderId;
         routeActive = true;
       } else if (newStatus == OrderStatus.entregado ||
           newStatus == OrderStatus.novedad) {
-        // Al finalizar la parada actual, avanzar automáticamente a la siguiente parada en orden
         activeId = _findNextSequentialOrderId(updatedOrders);
         if (activeId != null && routeActive) {
           updatedOrders = updatedOrders.map((o) {
@@ -393,7 +513,7 @@ class OrdersCubit extends Cubit<OrdersState> {
         isRouteActive: routeActive,
       ));
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }

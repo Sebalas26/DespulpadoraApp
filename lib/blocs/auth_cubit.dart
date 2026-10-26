@@ -5,32 +5,47 @@ import '../config/api_config.dart';
 import '../models/courier_model.dart';
 import '../services/api_service.dart';
 
-/// Estados de autenticación
+/// Clase base para los estados de autenticación del domiciliario.
 abstract class AuthState {}
 
+/// Estado inicial antes de verificar la sesión almacenada.
 class AuthInitial extends AuthState {}
+
+/// Estado de carga durante la verificación o inicio de sesión.
 class AuthLoading extends AuthState {}
 
+/// Estado que representa a un domiciliario autenticado con sesión activa.
 class AuthAuthenticated extends AuthState {
+  /// Información de perfil y credenciales del domiciliario autenticado.
   final CourierModel courier;
+
+  /// Crea una nueva instancia de [AuthAuthenticated].
   AuthAuthenticated({required this.courier});
 }
 
+/// Estado que indica ausencia de sesión activa.
 class AuthUnauthenticated extends AuthState {}
 
+/// Estado que representa un error durante el proceso de autenticación.
 class AuthError extends AuthState {
+  /// Mensaje descriptivo del error ocurrido.
   final String message;
+
+  /// Crea una nueva instancia de [AuthError].
   AuthError(this.message);
 }
 
-/// Cubit para gestionar el inicio de sesión, perfil y persistencia de token JWT
+/// Cubit encargado de gestionar la autenticación, sesión local y estado de turno del domiciliario.
 class AuthCubit extends Cubit<AuthState> {
+  /// Servicio de comunicación con el backend REST.
   final ApiService _apiService;
 
+  /// Crea una instancia de [AuthCubit] con inyección opcional de [ApiService].
   AuthCubit({ApiService? apiService})
       : _apiService = apiService ?? ApiService(),
         super(AuthInitial());
 
+  /// Retorna el domiciliario actualmente autenticado o `null` si no hay sesión activa.
   CourierModel? get currentCourier {
     if (state is AuthAuthenticated) {
       return (state as AuthAuthenticated).courier;
@@ -38,7 +53,7 @@ class AuthCubit extends Cubit<AuthState> {
     return null;
   }
 
-  /// Verifica si existe una sesión guardada en SharedPreferences al iniciar la app
+  /// Verifica si existe una sesión persistida en `SharedPreferences` al iniciar la aplicación.
   Future<void> checkStoredSession() async {
     emit(AuthLoading());
     try {
@@ -46,19 +61,21 @@ class AuthCubit extends Cubit<AuthState> {
       final courierDataStr = prefs.getString(ApiConfig.keyCourierData);
       final isOnShift = prefs.getBool(ApiConfig.keyIsOnShift) ?? false;
 
-      if (courierDataStr != null) {
-        final Map<String, dynamic> json = jsonDecode(courierDataStr);
-        final courier = CourierModel.fromJson(json).copyWith(isOnline: isOnShift);
+      if (courierDataStr != null && courierDataStr.isNotEmpty) {
+        final Map<String, dynamic> json =
+            jsonDecode(courierDataStr) as Map<String, dynamic>;
+        final courier =
+            CourierModel.fromJson(json).copyWith(isOnline: isOnShift);
         emit(AuthAuthenticated(courier: courier));
       } else {
         emit(AuthUnauthenticated());
       }
-    } catch (e) {
+    } catch (_) {
       emit(AuthUnauthenticated());
     }
   }
 
-  /// Inicio de sesión con validación de credenciales
+  /// Autentica al domiciliario con sus credenciales y persiste la sesión si se solicita.
   Future<void> login({
     required String usernameOrEmail,
     required String password,
@@ -73,7 +90,10 @@ class AuthCubit extends Cubit<AuthState> {
 
       final prefs = await SharedPreferences.getInstance();
       if (rememberSession) {
-        await prefs.setString(ApiConfig.keyCourierData, jsonEncode(courier.toJson()));
+        await prefs.setString(
+          ApiConfig.keyCourierData,
+          jsonEncode(courier.toJson()),
+        );
         if (courier.token != null) {
           await prefs.setString(ApiConfig.keyAuthToken, courier.token!);
         }
@@ -88,20 +108,28 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
-  /// Cambia el estado del mensajero entre "En Turno / Disponible" vs "Desconectado"
+  /// Cambia el estado de turno del domiciliario y lo sincroniza con el backend y preferencias locales.
   Future<void> toggleShiftStatus(bool isOnShift) async {
     if (state is AuthAuthenticated) {
-      final courier = (state as AuthAuthenticated).courier;
-      final updated = courier.copyWith(isOnline: isOnShift);
+      try {
+        final courier = (state as AuthAuthenticated).courier;
+        final parsedId = int.tryParse(courier.id) ?? 0;
+        await _apiService.updateShiftStatus(
+          courierId: parsedId,
+          status: isOnShift ? 'disponible' : 'fuera_turno',
+          token: courier.token,
+        );
 
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(ApiConfig.keyIsOnShift, isOnShift);
+        final updated = courier.copyWith(isOnline: isOnShift);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(ApiConfig.keyIsOnShift, isOnShift);
 
-      emit(AuthAuthenticated(courier: updated));
+        emit(AuthAuthenticated(courier: updated));
+      } catch (_) {}
     }
   }
 
-  /// Cierre de sesión y limpieza de credenciales locales
+  /// Cierra la sesión actual y elimina los datos de autenticación almacenados localmente.
   Future<void> logout() async {
     try {
       final prefs = await SharedPreferences.getInstance();

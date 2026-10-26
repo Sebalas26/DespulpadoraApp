@@ -1,15 +1,33 @@
-/// Modelo de telemetría GPS para transmisión en tiempo real vía WebSocket
+/// Modelo de telemetría GPS para transmisión en tiempo real vía WebSocket y API REST.
 class CourierLocationPayload {
+  /// Identificador único del domiciliario que transmite su ubicación.
   final String courierId;
+
+  /// Nombre completo del domiciliario.
   final String courierName;
+
+  /// Latitud geográfica actual en grados decimales.
   final double latitude;
+
+  /// Longitud geográfica actual en grados decimales.
   final double longitude;
-  final double speed;        // Velocidad en km/h
-  final double heading;      // Dirección/rumbo en grados (0-360)
-  final String? activeOrderId; // ID del pedido en curso (o null si solo patrulla/libre)
-  final int batteryLevel;    // Nivel de batería en porcentaje (0-100)
+
+  /// Velocidad de desplazamiento en kilómetros por hora.
+  final double speed;
+
+  /// Rumbo o dirección en grados sexagesimales (0 a 360).
+  final double heading;
+
+  /// Identificador del pedido activo en curso, si existe.
+  final String? activeOrderId;
+
+  /// Nivel de batería del dispositivo móvil en porcentaje (0 a 100).
+  final int batteryLevel;
+
+  /// Marca de tiempo UTC de la lectura GPS.
   final DateTime timestamp;
 
+  /// Crea una nueva instancia de [CourierLocationPayload].
   CourierLocationPayload({
     required this.courierId,
     required this.courierName,
@@ -22,37 +40,38 @@ class CourierLocationPayload {
     DateTime? timestamp,
   }) : timestamp = timestamp ?? DateTime.now().toUtc();
 
-  /// Convierte al formato exacto requerido por el WebSocket
+  /// Convierte el payload al formato de evento requerido por el servidor WebSocket.
   Map<String, dynamic> toWebSocketEvent() {
     return {
-      "event": "courier_location_update",
-      "data": {
-        "courierId": courierId,
-        "courierName": courierName,
-        "latitude": double.parse(latitude.toStringAsFixed(6)),
-        "longitude": double.parse(longitude.toStringAsFixed(6)),
-        "speed": double.parse(speed.toStringAsFixed(1)),
-        "heading": double.parse(heading.toStringAsFixed(1)),
-        "activeOrderId": activeOrderId,
-        "batteryLevel": batteryLevel,
-        "timestamp": timestamp.toIso8601String(),
-      }
+      'event': 'courier_location_update',
+      'data': {
+        'courierId': courierId,
+        'courierName': courierName,
+        'latitude': double.parse(latitude.toStringAsFixed(6)),
+        'longitude': double.parse(longitude.toStringAsFixed(6)),
+        'speed': double.parse(speed.toStringAsFixed(1)),
+        'heading': double.parse(heading.toStringAsFixed(1)),
+        'activeOrderId': activeOrderId,
+        'batteryLevel': batteryLevel,
+        'timestamp': timestamp.toIso8601String(),
+      },
     };
   }
 
+  /// Construye una instancia de [CourierLocationPayload] a partir de un mapa JSON.
   factory CourierLocationPayload.fromJson(Map<String, dynamic> json) {
     final data = json['data'] as Map<String, dynamic>? ?? json;
     return CourierLocationPayload(
-      courierId: data['courierId'] ?? '',
-      courierName: data['courierName'] ?? '',
-      latitude: (data['latitude'] ?? 0).toDouble(),
-      longitude: (data['longitude'] ?? 0).toDouble(),
-      speed: (data['speed'] ?? 0).toDouble(),
-      heading: (data['heading'] ?? 0).toDouble(),
-      activeOrderId: data['activeOrderId'],
-      batteryLevel: (data['batteryLevel'] ?? 100) as int,
+      courierId: (data['courierId'] ?? '').toString(),
+      courierName: (data['courierName'] ?? '').toString(),
+      latitude: ((data['latitude'] ?? 0) as num).toDouble(),
+      longitude: ((data['longitude'] ?? 0) as num).toDouble(),
+      speed: ((data['speed'] ?? 0) as num).toDouble(),
+      heading: ((data['heading'] ?? 0) as num).toDouble(),
+      activeOrderId: data['activeOrderId']?.toString(),
+      batteryLevel: ((data['batteryLevel'] ?? 100) as num).toInt(),
       timestamp: data['timestamp'] != null
-          ? DateTime.tryParse(data['timestamp'])?.toUtc()
+          ? DateTime.tryParse(data['timestamp'].toString())?.toUtc()
           : null,
     );
   }

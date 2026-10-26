@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
 
-/// Modal para reportar incidencias / pedidos no entregados
+/// Diálogo modal para reportar incidencias o novedades en pedidos que no pudieron entregarse.
 class NoveltyDialog extends StatefulWidget {
+  /// Pedido sobre el cual se reporta la novedad.
   final OrderModel order;
-  final Function(String reason) onReport;
 
+  /// Callback invocado con la descripción del motivo de la novedad.
+  final void Function(String reason) onReport;
+
+  /// Crea una nueva instancia de [NoveltyDialog].
   const NoveltyDialog({
     super.key,
     required this.order,
@@ -17,7 +21,9 @@ class NoveltyDialog extends StatefulWidget {
   State<NoveltyDialog> createState() => _NoveltyDialogState();
 }
 
+/// Estado interno de [NoveltyDialog] para la selección de causal y observaciones adicionales.
 class _NoveltyDialogState extends State<NoveltyDialog> {
+  /// Motivos operativos estándar de novedad en entrega.
   final List<String> _commonReasons = [
     'Cliente no contesta llamadas ni portería',
     'Dirección errónea o incompleta',
@@ -27,7 +33,10 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
     'Producto averiado en trayecto',
   ];
 
+  /// Motivo seleccionado actualmente en la lista.
   String? _selectedReason;
+
+  /// Controlador de texto para el detalle adicional de la novedad.
   late final TextEditingController _customReasonController;
 
   @override
@@ -97,11 +106,9 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 12),
-
             const Text(
               'Selecciona el motivo:',
               style: TextStyle(
@@ -111,7 +118,6 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
               ),
             ),
             const SizedBox(height: 8),
-
             ..._commonReasons.map((reason) {
               final isSelected = _selectedReason == reason;
               return InkWell(
@@ -123,7 +129,8 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
                 borderRadius: BorderRadius.circular(8),
                 child: Container(
                   margin: const EdgeInsets.only(bottom: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? AppColors.error.withValues(alpha: 0.12)
@@ -137,8 +144,11 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
                   child: Row(
                     children: [
                       Icon(
-                        isSelected ? Icons.radio_button_checked : Icons.radio_button_off,
-                        color: isSelected ? AppColors.error : AppColors.textMuted,
+                        isSelected
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                        color:
+                            isSelected ? AppColors.error : AppColors.textMuted,
                         size: 18,
                       ),
                       const SizedBox(width: 10),
@@ -146,9 +156,13 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
                         child: Text(
                           reason,
                           style: TextStyle(
-                            color: isSelected ? AppColors.textPrimary : AppColors.textSecondary,
+                            color: isSelected
+                                ? AppColors.textPrimary
+                                : AppColors.textSecondary,
                             fontSize: 12.5,
-                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                            fontWeight: isSelected
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -157,7 +171,6 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
                 ),
               );
             }),
-
             const SizedBox(height: 10),
             const Text(
               'Detalle adicional:',
@@ -175,9 +188,7 @@ class _NoveltyDialogState extends State<NoveltyDialog> {
                 hintText: 'Añade información para la central de logística...',
               ),
             ),
-
             const SizedBox(height: 20),
-
             Row(
               children: [
                 Expanded(

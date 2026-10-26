@@ -13,10 +13,10 @@ import 'services/websocket_service.dart';
 import 'views/home_orders_screen.dart';
 import 'views/login_screen.dart';
 
-void main() async {
+/// Punto de entrada principal de la aplicación móvil DespulpadoraApp.
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Configuración de barra de estado transparente y estilo claro DGL
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
@@ -27,22 +27,29 @@ void main() async {
     ),
   );
 
-  // Inicializar almacenamiento de configuración
   await ApiConfig.init();
 
   runApp(const PulpasProApp());
 }
 
+/// Widget raíz que inicializa los proveedores de estado BLoC/Cubit y la configuración de navegación.
 class PulpasProApp extends StatefulWidget {
+  /// Crea una nueva instancia de [PulpasProApp].
   const PulpasProApp({super.key});
 
   @override
   State<PulpasProApp> createState() => _PulpasProAppState();
 }
 
+/// Estado interno de [PulpasProApp] que administra las instancias de servicios principales.
 class _PulpasProAppState extends State<PulpasProApp> {
+  /// Servicio de comunicación HTTP REST.
   late final ApiService _apiService;
+
+  /// Servicio de comunicación en tiempo real vía WebSocket.
   late final WebSocketService _wsService;
+
+  /// Servicio de geolocalización GPS y lectura de batería.
   late final LocationService _locationService;
 
   @override
@@ -58,7 +65,8 @@ class _PulpasProAppState extends State<PulpasProApp> {
     return MultiBlocProvider(
       providers: [
         BlocProvider<AuthCubit>(
-          create: (_) => AuthCubit(apiService: _apiService)..checkStoredSession(),
+          create: (_) =>
+              AuthCubit(apiService: _apiService)..checkStoredSession(),
         ),
         BlocProvider<OrdersCubit>(
           create: (_) => OrdersCubit(apiService: _apiService),
@@ -67,6 +75,7 @@ class _PulpasProAppState extends State<PulpasProApp> {
           create: (_) => TrackingCubit(
             locationService: _locationService,
             wsService: _wsService,
+            apiService: _apiService,
           ),
         ),
       ],
@@ -81,8 +90,9 @@ class _PulpasProAppState extends State<PulpasProApp> {
   }
 }
 
-/// Controla la pantalla inicial según el estado de la sesión guardada
+/// Compuerta de navegación que dirige a la vista correspondiente según el estado de autenticación.
 class AuthGate extends StatelessWidget {
+  /// Crea una nueva instancia de [AuthGate].
   const AuthGate({super.key});
 
   @override

@@ -11,24 +11,33 @@ import '../services/location_service.dart';
 import '../services/routing_service.dart';
 import 'widgets/osm_map_widget.dart';
 
-/// Fragmento / Pantalla de "Ver Ruta":
-/// Muestra únicamente el mapa con los puntos a donde debe ir el domiciliario, su orden (#1, #2, #3...),
-/// una lista flotante encima del mapa con los puntos en secuencia, y el botón flotante "Iniciar Ruta"
-/// que lleva a "Enrutado en Vivo".
+/// Pantalla de vista previa cartográfica con los puntos y secuencia de paradas antes de iniciar ruta.
 class RoutePreviewMapScreen extends StatefulWidget {
+  /// Crea una nueva instancia de [RoutePreviewMapScreen].
   const RoutePreviewMapScreen({super.key});
 
   @override
   State<RoutePreviewMapScreen> createState() => _RoutePreviewMapScreenState();
 }
 
+/// Estado interno de [RoutePreviewMapScreen] para el cálculo de polilínea y selección de paradas.
 class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
+  /// Servicio de cálculo de rutas viales.
   final RoutingService _routingService = RoutingService();
 
+  /// Lista de coordenadas que conforman la polilínea completa del recorrido.
   List<LatLng> _fullRoutePoints = [];
+
+  /// Indica si se está calculando la geometría de la ruta en segundo plano.
   bool _isLoadingRoute = false;
+
+  /// Indica si se está procesando el inicio de la ruta.
   bool _isStartingRoute = false;
+
+  /// Indica si el listado flotante de paradas se encuentra desplegado.
   bool _isStopsListExpanded = true;
+
+  /// Identificador de la parada enfocada manualmente en la vista previa.
   String? _selectedPreviewStopId;
 
   @override
@@ -39,6 +48,7 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
     });
   }
 
+  /// Resuelve una coordenada válida para el domiciliario dentro de los límites nacionales.
   LatLng _resolveCourierLocation(LatLng? rawLoc) {
     if (rawLoc != null &&
         LocationService.isWithinColombia(rawLoc.latitude, rawLoc.longitude)) {
@@ -47,65 +57,80 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
     return LocationService.defaultLocation;
   }
 
+  /// Calcula la ruta vial completa que une todas las paradas asignadas.
   Future<void> _loadPreviewStreetRoute() async {
     if (_isLoadingRoute) return;
     _isLoadingRoute = true;
 
-    final ordersState = context.read<OrdersCubit>().state;
-    final trackState = context.read<TrackingCubit>().state;
-    final courierLoc = _resolveCourierLocation(trackState.currentLocation);
+    try {
+      final ordersState = context.read<OrdersCubit>().state;
+      final trackState = context.read<TrackingCubit>().state;
+      final courierLoc = _resolveCourierLocation(trackState.currentLocation);
 
-    final waypoints = <LatLng>[
-      courierLoc,
-      ...ordersState.orders.map((o) => LatLng(o.latitud, o.longitud)),
-    ];
+      final waypoints = <LatLng>[
+        courierLoc,
+        ...ordersState.orders.map((o) => LatLng(o.latitud, o.longitud)),
+      ];
 
-    final multiRoute = await _routingService.getMultiStopRoute(
-      waypoints: waypoints,
-    );
+      final multiRoute = await _routingService.getMultiStopRoute(
+        waypoints: waypoints,
+      );
 
-    if (mounted) {
-      setState(() {
-        _fullRoutePoints = multiRoute.fullPoints;
-        _isLoadingRoute = false;
-      });
+      if (mounted) {
+        setState(() {
+          _fullRoutePoints = multiRoute.fullPoints;
+          _isLoadingRoute = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingRoute = false);
+      }
     }
   }
 
+  /// Activa el turno del domiciliario, inicia el recorrido secuencial y navega al mapa en vivo.
   Future<void> _handleIniciarRuta() async {
     if (_isStartingRoute) return;
     setState(() => _isStartingRoute = true);
 
-    final authCubit = context.read<AuthCubit>();
-    final ordersCubit = context.read<OrdersCubit>();
-    final trackingCubit = context.read<TrackingCubit>();
-    final courier = authCubit.currentCourier;
+    try {
+      final authCubit = context.read<AuthCubit>();
+      final ordersCubit = context.read<OrdersCubit>();
+      final trackingCubit = context.read<TrackingCubit>();
+      final courier = authCubit.currentCourier;
 
-    // 1. Activar turno si está desconectado
-    if (courier != null && !courier.isOnline) {
-      await authCubit.toggleShiftStatus(true);
-    }
+      if (courier != null && !courier.isOnline) {
+        await authCubit.toggleShiftStatus(true);
+      }
 
-    // 2. Iniciar ruta sobre la parada en turno actual (#1, o la que corresponda en orden)
-    final activeStop = await ordersCubit.startFullCourierRoute(
-      token: courier?.token,
-    );
+      final activeStop = await ordersCubit.startFullCourierRoute(
+        token: courier?.token,
+      );
 
-    // 3. Sincronizar GPS
-    trackingCubit.syncWithShiftStatus(
-      courier: authCubit.currentCourier?.copyWith(isOnline: true),
-      activeOrderId: activeStop?.id ?? ordersCubit.state.activeOrderId,
-    );
+      trackingCubit.syncWithShiftStatus(
+        courier: authCubit.currentCourier?.copyWith(isOnline: true),
+        activeOrderId: activeStop?.id ?? ordersCubit.state.activeOrderId,
+      );
 
-    if (mounted) {
-      setState(() => _isStartingRoute = false);
-      Navigator.of(context).pushReplacementNamed(AppRoutes.courierRouteMap);
+      if (mounted) {
+        setState(() => _isStartingRoute = false);
+        Navigator.of(context).pushReplacementNamed(AppRoutes.courierRouteMap);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isStartingRoute = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final courier = context.watch<AuthCubit>().currentCourier;
+    final plateDisplay =
+        (courier != null && courier.placaVehiculo.trim().isNotEmpty)
+            ? courier.placaVehiculo.trim()
+            : 'Sin placa';
 
     return Scaffold(
       appBar: AppBar(
@@ -134,15 +159,18 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
       body: BlocBuilder<OrdersCubit, OrdersState>(
         builder: (context, ordersState) {
           final turnOrder = ordersState.currentTurnOrder;
-          final focusedId =
-              _selectedPreviewStopId ?? turnOrder?.id ?? ordersState.activeOrder?.id;
+          final focusedId = _selectedPreviewStopId ??
+              turnOrder?.id ??
+              ordersState.activeOrder?.id;
           OrderModel? focusedOrder;
           if (focusedId != null) {
             try {
-              focusedOrder = ordersState.orders.firstWhere((o) => o.id == focusedId);
+              focusedOrder =
+                  ordersState.orders.firstWhere((o) => o.id == focusedId);
             } catch (_) {}
           }
-          focusedOrder ??= ordersState.orders.isNotEmpty ? ordersState.orders.first : null;
+          focusedOrder ??=
+              ordersState.orders.isNotEmpty ? ordersState.orders.first : null;
 
           return BlocBuilder<TrackingCubit, TrackingState>(
             builder: (context, trackState) {
@@ -155,14 +183,13 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
 
               return Stack(
                 children: [
-                  // 1. Mapa a pantalla completa con los puntos enumerados (#1, #2, #3...) y el trazado vial
                   Positioned.fill(
                     child: OsmMapWidget(
                       courierLocation: courierLatLng,
                       destinationLocation: destLatLng,
                       destinationTitle:
                           focusedOrder?.clienteNombre ?? 'Punto de Entrega',
-                      courierPlate: courier?.placaVehiculo ?? 'XYZ-789',
+                      courierPlate: plateDisplay,
                       heading: trackState.heading,
                       showPolyline: true,
                       showCourierMarker: true,
@@ -177,8 +204,6 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
                       },
                     ),
                   ),
-
-                  // 2. Lista de Puntos Encima del Mapa (En orden #1, #2, #3, #4)
                   Positioned(
                     top: 12,
                     left: 12,
@@ -189,8 +214,6 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
                       turnOrderId: turnOrder?.id,
                     ),
                   ),
-
-                  // 3. Botón Flotante "Iniciar Ruta" / "Continuar Ruta" Encima del Mapa (Esquina Inferior Derecha)
                   Positioned(
                     right: 16,
                     bottom: 20,
@@ -246,7 +269,7 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
     );
   }
 
-  /// Lista flotante encima del mapa con todos los puntos y su orden secuencial (#1, #2, #3...)
+  /// Construye la tarjeta flotante superior con la secuencia ordenada de paradas.
   Widget _buildFloatingStopsListOverlay({
     required OrdersState ordersState,
     required String? focusedOrderId,
@@ -271,7 +294,6 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Cabecera desplegable de la lista sobre el mapa
           InkWell(
             onTap: () =>
                 setState(() => _isStopsListExpanded = !_isStopsListExpanded),
@@ -331,7 +353,6 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
               ),
             ),
           ),
-
           if (_isStopsListExpanded) ...[
             const Divider(height: 1),
             Flexible(
@@ -369,15 +390,13 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
                             : AppColors.background,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: isFocused
-                              ? AppColors.primary
-                              : AppColors.border,
+                          color:
+                              isFocused ? AppColors.primary : AppColors.border,
                           width: isFocused ? 1.4 : 1,
                         ),
                       ),
                       child: Row(
                         children: [
-                          // Número de orden (#1, #2, #3...)
                           Container(
                             width: 26,
                             height: 26,
@@ -409,7 +428,6 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
                             ),
                           ),
                           const SizedBox(width: 9),
-                          // Cliente y dirección
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -463,7 +481,6 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
                             ),
                           ),
                           const SizedBox(width: 6),
-                          // Estado de secuencia
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 7,
@@ -509,4 +526,3 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
     );
   }
 }
-

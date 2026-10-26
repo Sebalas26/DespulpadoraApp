@@ -2,22 +2,39 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../config/theme.dart';
 
-/// Posibles estados de una orden de entrega
+/// Estados posibles dentro del ciclo de vida de entrega de un pedido.
 enum OrderStatus {
-  asignado,   // Pedido asignado en bodega / pendiente de salida
-  enCamino,   // Mensajero en ruta hacia la dirección del cliente
-  enPunto,    // Mensajero llegó a la portería/puerta del cliente
-  entregado,  // Pedido entregado y cobro confirmado
-  novedad,    // Novedad reportada (no entregado, cliente no responde, etc.)
+  /// Pedido asignado al domiciliario y pendiente de iniciar desplazamiento.
+  asignado,
+
+  /// Domiciliario en desplazamiento hacia la dirección del cliente.
+  enCamino,
+
+  /// Domiciliario ubicado en el punto de entrega del cliente.
+  enPunto,
+
+  /// Pedido entregado satisfactoriamente y recaudo confirmado.
+  entregado,
+
+  /// Incidencia o novedad reportada que impide la entrega.
+  novedad,
 }
 
-/// Item de producto dentro del pedido (Pulpas de Frutas)
+/// Ítem de producto incluido dentro de una orden de entrega.
 class OrderItem {
+  /// Nombre de la fruta o producto.
   final String nombre;
-  final String presentacion; // ej. "140g", "1000g / 1Kg", "Pack x10"
+
+  /// Presentación o gramaje del producto.
+  final String presentacion;
+
+  /// Cantidad de unidades solicitadas.
   final int cantidad;
+
+  /// Precio unitario en pesos colombianos.
   final double precioUnitario;
 
+  /// Crea una nueva instancia de [OrderItem].
   OrderItem({
     required this.nombre,
     required this.presentacion,
@@ -25,17 +42,29 @@ class OrderItem {
     required this.precioUnitario,
   });
 
+  /// Calcula el subtotal monetario de la línea de producto.
   double get subtotal => cantidad * precioUnitario;
 
+  /// Construye una instancia de [OrderItem] a partir de un mapa JSON del backend.
   factory OrderItem.fromJson(Map<String, dynamic> json) {
     return OrderItem(
-      nombre: json['fruitName'] ?? json['nombre'] ?? json['productName'] ?? 'Pulpa',
-      presentacion: json['sizeLabel'] ?? json['presentacion'] ?? json['presentation'] ?? '140g',
-      cantidad: (json['quantity'] ?? json['cantidad'] ?? 1) as int,
-      precioUnitario: (json['unitPrice'] ?? json['precioUnitario'] ?? 0).toDouble(),
+      nombre:
+          (json['fruitName'] ?? json['nombre'] ?? json['productName'] ?? '')
+              .toString(),
+      presentacion: (json['sizeLabel'] ??
+              json['sizeKey'] ??
+              json['presentacion'] ??
+              json['presentation'] ??
+              '')
+          .toString(),
+      cantidad: ((json['quantity'] ?? json['cantidad'] ?? 0) as num).toInt(),
+      precioUnitario:
+          ((json['unitPrice'] ?? json['precioUnitario'] ?? 0) as num)
+              .toDouble(),
     );
   }
 
+  /// Convierte el [OrderItem] a un mapa JSON serializable.
   Map<String, dynamic> toJson() {
     return {
       'nombre': nombre,
@@ -46,37 +75,75 @@ class OrderItem {
   }
 }
 
-/// Modelo completo de la orden de despacho para el mensajero
+/// Modelo de dominio que representa una orden de despacho asignada al domiciliario.
 class OrderModel {
-  final String id;
-  final String clienteNombre;
-  final String clienteTelefono;
-  final String direccion;
-  final String barrio;
-  final String ciudad;
-  final double latitud;
-  final double longitud;
-  final double montoTotal;
-  final String metodoPago; // ej. "Efectivo Contraentrega", "Transferencia", "Pagado"
-  final bool requiereCobro;
-  final OrderStatus estado;
-  final List<OrderItem> items;
-  final String? notasEntrega;
-  final String? observacionesNovedad;
-  final DateTime fecha;
-  final int prioridad; // 1 = Urgente, 2 = Normal, 3 = Flexible
+  /// Identificador numérico en base de datos para invocaciones REST.
+  final int? databaseId;
 
+  /// Código visible del pedido (ej. `ORD-0001`).
+  final String id;
+
+  /// Nombre del cliente destinatario.
+  final String clienteNombre;
+
+  /// Teléfono de contacto del cliente destinatario.
+  final String clienteTelefono;
+
+  /// Dirección física de entrega.
+  final String direccion;
+
+  /// Barrio, localidad o zona de entrega.
+  final String barrio;
+
+  /// Ciudad de entrega.
+  final String ciudad;
+
+  /// Latitud geográfica del punto de entrega.
+  final double latitud;
+
+  /// Longitud geográfica del punto de entrega.
+  final double longitud;
+
+  /// Valor monetario total del pedido.
+  final double montoTotal;
+
+  /// Método de pago estipulado para la orden.
+  final String metodoPago;
+
+  /// Indica si el domiciliario debe realizar cobro al entregar.
+  final bool requiereCobro;
+
+  /// Estado operativo actual del pedido.
+  final OrderStatus estado;
+
+  /// Lista de productos que componen el pedido.
+  final List<OrderItem> items;
+
+  /// Notas o instrucciones de entrega proporcionadas.
+  final String? notasEntrega;
+
+  /// Descripción de la novedad reportada, en caso de existir.
+  final String? observacionesNovedad;
+
+  /// Fecha de registro o programación de la orden.
+  final DateTime fecha;
+
+  /// Nivel de prioridad de entrega.
+  final int prioridad;
+
+  /// Crea una nueva instancia de [OrderModel].
   OrderModel({
+    this.databaseId,
     required this.id,
     required this.clienteNombre,
     required this.clienteTelefono,
     required this.direccion,
     required this.barrio,
-    this.ciudad = 'Bogotá',
+    this.ciudad = '',
     required this.latitud,
     required this.longitud,
     required this.montoTotal,
-    required this.metodoPago,
+    this.metodoPago = '',
     this.requiereCobro = true,
     this.estado = OrderStatus.asignado,
     required this.items,
@@ -86,15 +153,24 @@ class OrderModel {
     this.prioridad = 2,
   }) : fecha = fecha ?? DateTime.now();
 
+  /// Identificador prioritario para llamadas a endpoints REST (`/orders/$apiOrderId/...`).
+  String get apiOrderId =>
+      (databaseId != null && databaseId! > 0) ? databaseId.toString() : id;
+
+  /// Convierte una cadena de estado (snake_case o PascalCase) en su valor [OrderStatus].
   static OrderStatus _parseStatus(String? statusStr) {
     switch (statusStr?.toLowerCase().trim()) {
       case 'en_camino':
       case 'en camino':
+      case 'encamino':
       case 'in_transit':
       case 'en_ruta':
+      case 'enruta':
+      case 'en ruta':
         return OrderStatus.enCamino;
       case 'en_punto':
       case 'en punto':
+      case 'enpunto':
       case 'arrived':
         return OrderStatus.enPunto;
       case 'entregado':
@@ -114,6 +190,7 @@ class OrderModel {
     }
   }
 
+  /// Convierte un valor de [OrderStatus] a su representación de cadena snake_case.
   static String _statusToString(OrderStatus status) {
     switch (status) {
       case OrderStatus.asignado:
@@ -129,6 +206,7 @@ class OrderModel {
     }
   }
 
+  /// Etiqueta legible del estado actual para mostrar en la interfaz.
   String get estadoLabel {
     switch (estado) {
       case OrderStatus.asignado:
@@ -144,6 +222,7 @@ class OrderModel {
     }
   }
 
+  /// Color semántico asociado al estado actual del pedido.
   Color get estadoColor {
     switch (estado) {
       case OrderStatus.asignado:
@@ -159,6 +238,7 @@ class OrderModel {
     }
   }
 
+  /// Monto total formateado en moneda colombiana (COP).
   String get montoFormatted {
     final currencyFormatter = NumberFormat.currency(
       locale: 'es_CO',
@@ -168,37 +248,72 @@ class OrderModel {
     return '${currencyFormatter.format(montoTotal)} COP';
   }
 
+  /// Suma total de unidades de producto en la orden.
   int get totalUnidades => items.fold(0, (sum, item) => sum + item.cantidad);
 
+  /// Construye una instancia de [OrderModel] a partir de un mapa JSON del backend.
   factory OrderModel.fromJson(Map<String, dynamic> json) {
     final itemsList = (json['items'] as List<dynamic>? ?? [])
         .map((item) => OrderItem.fromJson(item as Map<String, dynamic>))
         .toList();
 
+    final dynamic rawDbId = json['databaseId'] ?? json['id'];
+    final int? parsedDbId = rawDbId is int
+        ? rawDbId
+        : (rawDbId != null ? int.tryParse(rawDbId.toString()) : null);
+
     return OrderModel(
-      id: json['orderCode'] ?? json['id']?.toString() ?? json['orderId'] ?? '',
-      clienteNombre: json['clientName'] ?? json['clienteNombre'] ?? json['customerName'] ?? 'Cliente PulpasPro',
-      clienteTelefono: json['clientPhone'] ?? json['clienteTelefono'] ?? json['customerPhone'] ?? '',
-      direccion: json['clientAddress'] ?? json['direccion'] ?? json['deliveryAddress'] ?? '',
-      barrio: json['clientZone'] ?? json['barrio'] ?? json['neighborhood'] ?? '',
-      ciudad: json['city'] ?? json['ciudad'] ?? 'Bogotá',
-      latitud: (json['latitude'] ?? json['latitud'] ?? 4.60971).toDouble(),
-      longitud: (json['longitude'] ?? json['longitud'] ?? -74.08175).toDouble(),
-      montoTotal: (json['total'] ?? json['montoTotal'] ?? json['totalAmount'] ?? 0).toDouble(),
-      metodoPago: json['paymentMethod'] ?? json['metodoPago'] ?? 'Efectivo Contraentrega',
-      requiereCobro: json['requiresCashCollection'] ?? json['requiereCobro'] ?? json['requiresCollection'] ?? true,
-      estado: _parseStatus(json['status'] ?? json['estado']),
+      databaseId: parsedDbId,
+      id: (json['orderCode'] ?? json['id'] ?? json['orderId'] ?? '').toString(),
+      clienteNombre:
+          (json['clientName'] ?? json['clienteNombre'] ?? json['customerName'] ?? '')
+              .toString(),
+      clienteTelefono:
+          (json['clientPhone'] ?? json['clienteTelefono'] ?? json['customerPhone'] ?? '')
+              .toString(),
+      direccion:
+          (json['clientAddress'] ?? json['direccion'] ?? json['deliveryAddress'] ?? '')
+              .toString(),
+      barrio:
+          (json['clientZone'] ?? json['barrio'] ?? json['neighborhood'] ?? '')
+              .toString(),
+      ciudad: (json['city'] ?? json['ciudad'] ?? '').toString(),
+      latitud: ((json['latitude'] ?? json['latitud'] ?? 0.0) as num).toDouble(),
+      longitud:
+          ((json['longitude'] ?? json['longitud'] ?? 0.0) as num).toDouble(),
+      montoTotal: ((json['total'] ??
+                  json['montoTotal'] ??
+                  json['totalAmount'] ??
+                  0.0) as num)
+              .toDouble(),
+      metodoPago:
+          (json['paymentMethod'] ?? json['metodoPago'] ?? '').toString(),
+      requiereCobro: (json['requiresCashCollection'] ??
+              json['requiereCobro'] ??
+              json['requiresCollection'] ??
+              true) ==
+          true,
+      estado: _parseStatus(
+        (json['status'] ?? json['estado'])?.toString(),
+      ),
       items: itemsList,
-      notasEntrega: json['notes'] ?? json['notasEntrega'],
-      observacionesNovedad: json['observacionesNovedad'] ?? json['noveltyReason'],
-      fecha: json['orderDate'] != null ? DateTime.tryParse(json['orderDate']) : (json['fecha'] != null ? DateTime.tryParse(json['fecha']) : null),
-      prioridad: json['prioridad'] ?? 2,
+      notasEntrega: (json['notes'] ?? json['notasEntrega'])?.toString(),
+      observacionesNovedad:
+          (json['observacionesNovedad'] ?? json['noveltyReason'])?.toString(),
+      fecha: json['orderDate'] != null
+          ? DateTime.tryParse(json['orderDate'].toString())
+          : (json['fecha'] != null
+              ? DateTime.tryParse(json['fecha'].toString())
+              : null),
+      prioridad: ((json['prioridad'] ?? (json['isPriority'] == true ? 1 : 2)) as num)
+          .toInt(),
     );
   }
 
-
+  /// Convierte el [OrderModel] a un mapa JSON serializable.
   Map<String, dynamic> toJson() {
     return {
+      if (databaseId != null) 'databaseId': databaseId,
       'id': id,
       'clienteNombre': clienteNombre,
       'clienteTelefono': clienteTelefono,
@@ -219,7 +334,9 @@ class OrderModel {
     };
   }
 
+  /// Crea una copia de este [OrderModel] reemplazando los atributos especificados.
   OrderModel copyWith({
+    int? databaseId,
     String? id,
     String? clienteNombre,
     String? clienteTelefono,
@@ -239,6 +356,7 @@ class OrderModel {
     int? prioridad,
   }) {
     return OrderModel(
+      databaseId: databaseId ?? this.databaseId,
       id: id ?? this.id,
       clienteNombre: clienteNombre ?? this.clienteNombre,
       clienteTelefono: clienteTelefono ?? this.clienteTelefono,
