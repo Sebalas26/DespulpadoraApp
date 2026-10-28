@@ -223,23 +223,13 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
       appBar: AppBar(
         title: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.25),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: const Icon(
-                Icons.two_wheeler,
-                color: Colors.white,
-                size: 16,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.asset(
+                'assets/images/logo-dgl.png',
+                width: 36,
+                height: 36,
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(width: 10),
