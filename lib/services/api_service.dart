@@ -39,6 +39,61 @@ class ApiService {
   /// Crea una instancia de [ApiService] permitiendo inyectar un [http.Client] personalizado.
   ApiService({http.Client? client}) : _client = client ?? http.Client();
 
+  /// Traduce y normaliza al español los mensajes de error provenientes del backend o de la red.
+  static String localizeErrorMessage(String rawMessage, {int? statusCode}) {
+    final cleaned = rawMessage.replaceAll('Exception: ', '').trim();
+    final lower = cleaned.toLowerCase();
+
+    if (lower.contains('invalid credentials or inactive account')) {
+      return 'Credenciales incorrectas o cuenta inactiva. Verifica tu usuario y contraseña.';
+    }
+    if (lower.contains('invalid credentials') ||
+        lower.contains('invalid username or password') ||
+        lower.contains('wrong password') ||
+        lower.contains('bad credentials') ||
+        lower.contains('incorrect password')) {
+      return 'Usuario o contraseña incorrectos. Verifica tus datos e intenta nuevamente.';
+    }
+    if (lower.contains('inactive account') ||
+        lower.contains('account is inactive') ||
+        lower.contains('user is inactive') ||
+        lower.contains('account disabled')) {
+      return 'Tu cuenta de domiciliario se encuentra inactiva. Contacta al administrador.';
+    }
+    if (lower.contains('user not found') ||
+        lower.contains('courier not found') ||
+        lower.contains('account not found')) {
+      return 'No se encontró una cuenta asociada a este usuario.';
+    }
+    if (lower == 'unauthorized' ||
+        lower == 'forbidden' ||
+        lower.contains('access denied') ||
+        lower.contains('not authorized')) {
+      return 'No tienes autorización para acceder con estas credenciales.';
+    }
+    if (lower.contains('timeoutexception') ||
+        lower.contains('timed out') ||
+        lower.contains('future not completed')) {
+      return 'El servidor tardó demasiado en responder. Verifica tu conexión a internet.';
+    }
+    if (lower.contains('socketexception') ||
+        lower.contains('clientexception') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('connection refused') ||
+        lower.contains('network is unreachable')) {
+      return 'No se pudo conectar con el servidor. Revisa tu conexión a internet.';
+    }
+    if (lower.contains('internal server error') ||
+        lower.contains('server error') ||
+        (statusCode != null && statusCode >= 500)) {
+      return 'El servidor presenta un inconveniente temporal. Intenta de nuevo en unos momentos.';
+    }
+    if (cleaned.isEmpty) {
+      return 'Credenciales incorrectas o acceso no autorizado.';
+    }
+    return cleaned;
+  }
+
   /// Autentica al domiciliario contra el endpoint `/api/mobile/auth/login`.
   Future<CourierModel> login({
     required String usernameOrEmail,
@@ -89,7 +144,7 @@ class ApiService {
           isOnline: (userData['isOnline'] ?? true) == true,
         );
       } else {
-        String errorMessage = 'Credenciales inválidas o acceso no autorizado';
+        String errorMessage = 'Credenciales incorrectas o acceso no autorizado';
         if (response.body.isNotEmpty) {
           try {
             final Map<String, dynamic> errorData =
@@ -99,13 +154,12 @@ class ApiService {
                     .toString();
           } catch (_) {}
         }
-        throw Exception(errorMessage);
+        throw Exception(
+          localizeErrorMessage(errorMessage, statusCode: response.statusCode),
+        );
       }
     } catch (e) {
-      if (e is Exception) {
-        rethrow;
-      }
-      throw Exception('Error de conexión al autenticar domiciliario: $e');
+      throw Exception(localizeErrorMessage(e.toString()));
     }
   }
 
@@ -209,8 +263,8 @@ class ApiService {
             },
             body: jsonEncode({
               'courierId': int.tryParse(courierId) ?? courierId,
-              if (routeCode != null) 'routeCode': routeCode,
-              if (photoTimestamp != null) 'photoTimestamp': photoTimestamp,
+              'routeCode': ?routeCode,
+              'photoTimestamp': ?photoTimestamp,
             }),
           )
           .timeout(const Duration(seconds: 6));

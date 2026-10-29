@@ -1,5 +1,32 @@
 # Historial de Cambios — DespulpadoraApp (Flutter Mobile)
 
+## [2026-10-28] — Eliminación de Ajuste de Servidor IP en Login, Versión Dinámica desde `pubspec.yaml` y Rediseño de Alertas de Error en Español con Paleta Suave
+
+### 💬 Prompt Original del Usuario
+> *"Ayudame para que la app de flutter en el login se le elimine la opcion de ajustar el servidor ip, adicionanl que en la version, cargue las del pubspec. Ajustame las alertas de error, pues veo que se muestran en ingles y ese estilo no me gusta, busca otro dise;o con un rojo menos fuerte"*
+
+### 🤖 Resumen Técnico para la IA
+- **Eliminación de Ajuste de Servidor IP en Login (`lib/views/login_screen.dart`)**: Se retiró el botón `'Ajustar Servidor IP'` y el diálogo modal `_showServerConfigModal()` del formulario de autenticación, manteniendo intacta la configuración por defecto en `ApiConfig` hacia `https://apidevdespulpadora.parking-flow.com/api/mobile`.
+- **Sincronización Dinámica de Versión desde `pubspec.yaml` (`pubspec.yaml`, `lib/config/api_config.dart`, `lib/views/login_screen.dart`)**: Se registró `pubspec.yaml` en la sección `assets:` y se implementaron `ApiConfig.parseVersionFromPubspec()` y `ApiConfig.loadAppVersion()` mediante `rootBundle.loadString('pubspec.yaml')`, mostrando dinámicamente `'DGL Despulpadora · v1.0.0 Flutter · 2026'` en el pie del login.
+- **Traducción de Errores al Español y Nuevo Diseño de Alerta con Rojo Suave (`lib/services/api_service.dart`, `lib/blocs/auth_cubit.dart`, `lib/config/theme.dart`, `lib/views/login_screen.dart`)**:
+  - Se implementó `ApiService.localizeErrorMessage()` para traducir al español cualquier respuesta en inglés del backend (`"Invalid credentials or inactive account."`, `"Unauthorized"`, `"User not found"`, `"Inactive account"`) y excepciones de red (`TimeoutException`, `SocketException`, `ClientException`).
+  - Se actualizó la paleta semántica de error en `AppColors` (`error = Color(0xFFC85A56)`, `errorSoftBg = Color(0xFFFDF2F2)`, `errorSoftBorder = Color(0xFFF3C6C6)`, `errorIconBg = Color(0xFFFCE4E4)`, `errorTextPrimary = Color(0xFF7F2D2B)`, `errorTextSecondary = Color(0xFF9E4744)`), aplicándola tanto a los bordes/textos de validación de los `TextFormField` como a la nueva tarjeta flotante de alerta (`_showSoftErrorAlert`) con ícono en burbuja circular, título, mensaje en español y botón de cierre.
+
+### 📦 Componentes Modificados
+- `pubspec.yaml`
+- `lib/config/api_config.dart`
+- `lib/config/theme.dart`
+- `lib/services/api_service.dart`
+- `lib/blocs/auth_cubit.dart`
+- `lib/views/login_screen.dart`
+- `test/widget_test.dart`
+
+### ✅ Verificación, Análisis Estático y Tests Unitarios
+- `dart analyze`: **0 issues found**.
+- `flutter test`: **11/11 pruebas aprobadas (100% Pass)**.
+
+---
+
 ## [2026-10-25] — Sincronización Fast-Forward, Reglas Corporativas `AGENTS.md`, Cero Datos Quemados, Conexión a `/api/mobile/...` y Pruebas Unitarias al 100%
 
 ### 1. Control de Versiones y Gobernanza

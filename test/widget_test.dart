@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
@@ -10,6 +12,7 @@ import 'package:despulpadora_app/models/courier_model.dart';
 import 'package:despulpadora_app/models/location_data_model.dart';
 import 'package:despulpadora_app/models/order_model.dart';
 import 'package:despulpadora_app/services/api_service.dart';
+import 'package:despulpadora_app/views/login_screen.dart';
 
 /// Suite integral de pruebas unitarias para modelos, servicios REST (`/api/mobile`) y Cubits.
 void main() {
@@ -488,6 +491,121 @@ void main() {
         );
         expect(cubit.state.pendingCount, equals(0));
         await cubit.close();
+      },
+    );
+
+    test(
+      'ApiConfig extrae la versión desde pubspec.yaml y ApiService traduce errores en inglés al español',
+      () async {
+        expect(
+          ApiConfig.parseVersionFromPubspec('name: app\nversion: 1.0.0+1\n'),
+          equals('1.0.0'),
+        );
+        final loadedVersion = await ApiConfig.loadAppVersion();
+        expect(loadedVersion, equals('1.0.0'));
+        expect(ApiConfig.appVersion, equals('1.0.0'));
+
+        expect(
+          ApiService.localizeErrorMessage(
+            'Invalid credentials or inactive account.',
+          ),
+          equals(
+            'Credenciales incorrectas o cuenta inactiva. Verifica tu usuario y contraseña.',
+          ),
+        );
+        expect(
+          ApiService.localizeErrorMessage('Unauthorized'),
+          equals(
+            'No tienes autorización para acceder con estas credenciales.',
+          ),
+        );
+        expect(
+          ApiService.localizeErrorMessage(
+            'TimeoutException after 0:00:08.000000: Future not completed',
+          ),
+          equals(
+            'El servidor tardó demasiado en responder. Verifica tu conexión a internet.',
+          ),
+        );
+        expect(
+          ApiService.localizeErrorMessage(
+            'ClientException with SocketException: Failed host lookup',
+          ),
+          equals(
+            'No se pudo conectar con el servidor. Revisa tu conexión a internet.',
+          ),
+        );
+
+        final englishFailClient = MockClient((_) async {
+          return http.Response(
+            jsonEncode({'message': 'Invalid credentials or inactive account.'}),
+            401,
+          );
+        });
+        final authCubit = AuthCubit(
+          apiService: ApiService(client: englishFailClient),
+        );
+        await authCubit.login(usernameOrEmail: 'domi01', password: 'wrong');
+        expect(authCubit.state, isA<AuthError>());
+        expect(
+          (authCubit.state as AuthError).message,
+          equals(
+            'Credenciales incorrectas o cuenta inactiva. Verifica tu usuario y contraseña.',
+          ),
+        );
+        await authCubit.close();
+      },
+    );
+
+    testWidgets(
+      'LoginScreen oculta Ajustar Servidor IP, muestra versión de pubspec.yaml y alerta de error en español',
+      (WidgetTester tester) async {
+        final failClient = MockClient((_) async {
+          return http.Response(
+            jsonEncode({'message': 'Invalid credentials or inactive account.'}),
+            401,
+          );
+        });
+        final authCubit = AuthCubit(
+          apiService: ApiService(client: failClient),
+        );
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BlocProvider<AuthCubit>.value(
+              value: authCubit,
+              child: const LoginScreen(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(find.text('Ajustar Servidor IP'), findsNothing);
+        expect(
+          find.text('DGL Despulpadora · v1.0.0 Flutter · 2026'),
+          findsOneWidget,
+        );
+
+        await tester.enterText(
+          find.byType(TextFormField).first,
+          'domiciliario1',
+        );
+        await tester.enterText(
+          find.byType(TextFormField).last,
+          'claveIncorrecta',
+        );
+        await tester.tap(find.text('Iniciar Turno'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('No se pudo iniciar sesión'), findsOneWidget);
+        expect(
+          find.text(
+            'Credenciales incorrectas o cuenta inactiva. Verifica tu usuario y contraseña.',
+          ),
+          findsOneWidget,
+        );
+
+        await authCubit.close();
       },
     );
   });

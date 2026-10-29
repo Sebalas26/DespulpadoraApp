@@ -1,3 +1,4 @@
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Opción de estilo cartográfico sincronizada con el catálogo visual de la plataforma.
@@ -148,14 +149,45 @@ class ApiConfig {
   /// URL de WebSocket activa en memoria.
   static String _currentWsUrl = defaultWsUrl;
 
+  /// Versión de la aplicación sincronizada desde el archivo `pubspec.yaml`.
+  static String _appVersion = '1.0.0';
+
   /// Obtiene la URL base REST actualmente configurada.
   static String get baseUrl => _currentBaseUrl;
 
   /// Obtiene la URL de WebSocket actualmente configurada.
   static String get wsUrl => _currentWsUrl;
 
-  /// Inicializa las configuraciones de conexión almacenadas en preferencias locales.
+  /// Obtiene la versión activa de la aplicación leída desde `pubspec.yaml`.
+  static String get appVersion => _appVersion;
+
+  /// Extrae el número de versión semántica a partir del contenido de un archivo `pubspec.yaml`.
+  static String parseVersionFromPubspec(String yamlContent) {
+    final match = RegExp(
+      r'^version:\s*([^\s+#]+)',
+      multiLine: true,
+    ).firstMatch(yamlContent);
+    if (match != null) {
+      final parsed = match.group(1)?.trim() ?? '';
+      if (parsed.isNotEmpty) {
+        return parsed;
+      }
+    }
+    return _appVersion;
+  }
+
+  /// Carga y actualiza la versión de la aplicación leyendo el asset `pubspec.yaml`.
+  static Future<String> loadAppVersion() async {
+    try {
+      final yamlContent = await rootBundle.loadString('pubspec.yaml');
+      _appVersion = parseVersionFromPubspec(yamlContent);
+    } catch (_) {}
+    return _appVersion;
+  }
+
+  /// Inicializa las configuraciones de conexión almacenadas en preferencias locales y la versión de la app.
   static Future<void> init() async {
+    await loadAppVersion();
     try {
       final prefs = await SharedPreferences.getInstance();
       _currentBaseUrl = prefs.getString(keyBaseUrl) ?? defaultBaseUrl;

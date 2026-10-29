@@ -66,8 +66,23 @@ class AppColors {
   /// Color semántico de advertencia.
   static const Color warning = Color(0xFFD97706);
 
-  /// Color semántico de error o peligro.
-  static const Color error = Color(0xFFDC2626);
+  /// Color semántico de error o peligro en tono coral/terracota suave.
+  static const Color error = Color(0xFFC85A56);
+
+  /// Fondo crema-rosado suave para alertas y notificaciones de error.
+  static const Color errorSoftBg = Color(0xFFFDF2F2);
+
+  /// Borde pastel delicado para contenedores de alerta y campos con error.
+  static const Color errorSoftBorder = Color(0xFFF3C6C6);
+
+  /// Fondo circular suave para íconos dentro de alertas de error.
+  static const Color errorIconBg = Color(0xFFFCE4E4);
+
+  /// Color de texto principal en tono vino oscuro suave para títulos de error.
+  static const Color errorTextPrimary = Color(0xFF7F2D2B);
+
+  /// Color de texto secundario para descripciones de error y validaciones.
+  static const Color errorTextSecondary = Color(0xFF9E4744);
 
   /// Color semántico informativo.
   static const Color info = Color(0xFF2563EB);
@@ -210,7 +225,16 @@ class AppTheme {
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: const BorderSide(color: AppColors.error),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.2),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: AppColors.error, width: 1.5),
+        ),
+        errorStyle: const TextStyle(
+          color: AppColors.errorTextSecondary,
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
         ),
       ),
       snackBarTheme: SnackBarThemeData(

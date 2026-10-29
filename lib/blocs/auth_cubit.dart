@@ -104,7 +104,13 @@ class AuthCubit extends Cubit<AuthState> {
 
       emit(AuthAuthenticated(courier: activeCourier));
     } catch (e) {
-      emit(AuthError(e.toString().replaceAll('Exception: ', '')));
+      emit(
+        AuthError(
+          ApiService.localizeErrorMessage(
+            e.toString().replaceAll('Exception: ', ''),
+          ),
+        ),
+      );
     }
   }
 

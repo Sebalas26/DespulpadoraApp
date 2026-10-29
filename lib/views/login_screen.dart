@@ -15,7 +15,7 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-/// Estado del formulario de autenticación y configuración de servidor en [LoginScreen].
+/// Estado del formulario de autenticación en [LoginScreen].
 class _LoginScreenState extends State<LoginScreen> {
   /// Clave global para validación del formulario de credenciales.
   final _formKey = GlobalKey<FormState>();
@@ -31,6 +31,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Indica si se debe persistir la sesión en el dispositivo.
   bool _rememberSession = true;
+
+  /// Versión activa de la aplicación sincronizada desde `pubspec.yaml`.
+  String _appVersion = ApiConfig.appVersion;
+
+  @override
+  void initState() {
+    super.initState();
+    _syncPubspecVersion();
+  }
+
+  /// Sincroniza la versión mostrada en el pie de página con la definida en `pubspec.yaml`.
+  Future<void> _syncPubspecVersion() async {
+    try {
+      final loadedVersion = await ApiConfig.loadAppVersion();
+      if (mounted && loadedVersion != _appVersion) {
+        setState(() {
+          _appVersion = loadedVersion;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
@@ -50,83 +71,89 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  /// Muestra el diálogo modal para ajustar las URLs del servidor REST y WebSocket.
-  void _showServerConfigModal() {
-    final baseUrlCtrl = TextEditingController(text: ApiConfig.baseUrl);
-    final wsUrlCtrl = TextEditingController(text: ApiConfig.wsUrl);
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: AppColors.border),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.settings_outlined, color: AppColors.primary),
-            SizedBox(width: 8),
-            Text('Conexión de Servidor'),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Configura los endpoints del backend y WebSocket según tu entorno:',
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'URL REST API:',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            TextFormField(
-              controller: baseUrlCtrl,
-              decoration: const InputDecoration(
-                hintText:
-                    'https://apidevdespulpadora.parking-flow.com/api/mobile',
+  /// Muestra una alerta flotante estilizada en tonos suaves con el mensaje de error en español.
+  void _showSoftErrorAlert(String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: EdgeInsets.zero,
+        duration: const Duration(seconds: 4),
+        content: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: AppColors.errorSoftBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.errorSoftBorder, width: 1.2),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.12),
+                blurRadius: 18,
+                offset: const Offset(0, 6),
               ),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'URL WebSocket:',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 4),
-            TextFormField(
-              controller: wsUrlCtrl,
-              decoration: const InputDecoration(
-                hintText: 'wss://apidevdespulpadora.parking-flow.com/ws',
+            ],
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: const BoxDecoration(
+                  color: AppColors.errorIconBg,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.error_outline_rounded,
+                  color: AppColors.error,
+                  size: 21,
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'No se pudo iniciar sesión',
+                      style: GoogleFonts.lato(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.errorTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      message,
+                      style: GoogleFonts.lato(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.errorTextSecondary,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: messenger.hideCurrentSnackBar,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: AppColors.errorTextSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () async {
-              await ApiConfig.resetDefaults();
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: const Text(
-              'Restablecer',
-              style: TextStyle(color: AppColors.textMuted),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              await ApiConfig.setCustomUrls(
-                baseUrl: baseUrlCtrl.text.trim(),
-                wsUrl: wsUrlCtrl.text.trim(),
-              );
-              if (ctx.mounted) Navigator.of(ctx).pop();
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
       ),
     );
   }
@@ -138,12 +165,7 @@ class _LoginScreenState extends State<LoginScreen> {
         if (state is AuthAuthenticated) {
           Navigator.of(context).pushReplacementNamed(AppRoutes.home);
         } else if (state is AuthError) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppColors.error,
-            ),
-          );
+          _showSoftErrorAlert(state.message);
         }
       },
       child: Scaffold(
@@ -293,6 +315,25 @@ class _LoginScreenState extends State<LoginScreen> {
                                   width: 1.5,
                                 ),
                               ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.5,
+                                ),
+                              ),
+                              errorStyle: GoogleFonts.lato(
+                                color: AppColors.errorTextSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             validator: (val) =>
                                 val == null || val.trim().isEmpty
@@ -360,6 +401,25 @@ class _LoginScreenState extends State<LoginScreen> {
                                   width: 1.5,
                                 ),
                               ),
+                              errorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.2,
+                                ),
+                              ),
+                              focusedErrorBorder: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: const BorderSide(
+                                  color: AppColors.error,
+                                  width: 1.5,
+                                ),
+                              ),
+                              errorStyle: GoogleFonts.lato(
+                                color: AppColors.errorTextSecondary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                             validator: (val) => val == null || val.isEmpty
                                 ? 'Ingresa tu contraseña'
@@ -386,11 +446,13 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'Recordar mi sesión en este dispositivo',
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Color(0xFF6B7280),
+                              const Expanded(
+                                child: Text(
+                                  'Recordar mi sesión en este dispositivo',
+                                  style: TextStyle(
+                                    fontSize: 13,
+                                    color: Color(0xFF6B7280),
+                                  ),
                                 ),
                               ),
                             ],
@@ -444,37 +506,11 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                           const SizedBox(height: 22),
                           const Divider(color: Color(0xFFE5E7EB), height: 1),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Center(
-                            child: TextButton.icon(
-                              style: TextButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 10,
-                                  vertical: 4,
-                                ),
-                                minimumSize: Size.zero,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                              icon: const Icon(
-                                Icons.tune_rounded,
-                                size: 15,
-                                color: Color(0xFF6B7280),
-                              ),
-                              label: const Text(
-                                'Ajustar Servidor IP',
-                                style: TextStyle(
-                                  color: Color(0xFF6B7280),
-                                  fontSize: 12,
-                                ),
-                              ),
-                              onPressed: _showServerConfigModal,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          const Center(
                             child: Text(
-                              'DGL Despulpadora · v2.0 Flutter · 2026',
-                              style: TextStyle(
+                              'DGL Despulpadora · v$_appVersion Flutter · 2026',
+                              style: const TextStyle(
                                 fontSize: 11.5,
                                 color: Color(0xFF9CA3AF),
                               ),
