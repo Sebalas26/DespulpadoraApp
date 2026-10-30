@@ -11,6 +11,7 @@ import 'package:despulpadora_app/config/api_config.dart';
 import 'package:despulpadora_app/models/courier_model.dart';
 import 'package:despulpadora_app/models/location_data_model.dart';
 import 'package:despulpadora_app/models/order_model.dart';
+import 'package:despulpadora_app/main.dart';
 import 'package:despulpadora_app/services/api_service.dart';
 import 'package:despulpadora_app/views/login_screen.dart';
 
@@ -597,6 +598,54 @@ void main() {
         await tester.tap(find.text('Iniciar Turno'));
         await tester.pumpAndSettle();
 
+        expect(find.text('No se pudo iniciar sesión'), findsOneWidget);
+        expect(
+          find.text(
+            'Credenciales incorrectas o cuenta inactiva. Verifica tu usuario y contraseña.',
+          ),
+          findsOneWidget,
+        );
+
+        await authCubit.close();
+      },
+    );
+
+    testWidgets(
+      'AuthGate mantiene LoginScreen montado durante AuthLoading y muestra alerta al fallar con domsebalas',
+      (WidgetTester tester) async {
+        final failClient = MockClient((_) async {
+          return http.Response(
+            jsonEncode({'message': 'Invalid credentials or inactive account.'}),
+            401,
+          );
+        });
+        final authCubit = AuthCubit(
+          apiService: ApiService(client: failClient),
+        );
+        await authCubit.checkStoredSession();
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: BlocProvider<AuthCubit>.value(
+              value: authCubit,
+              child: const AuthGate(),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        await tester.enterText(
+          find.byType(TextFormField).first,
+          'domsebalas',
+        );
+        await tester.enterText(
+          find.byType(TextFormField).last,
+          'claveIncorrecta',
+        );
+        await tester.tap(find.text('Iniciar Turno'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('domsebalas'), findsOneWidget);
         expect(find.text('No se pudo iniciar sesión'), findsOneWidget);
         expect(
           find.text(

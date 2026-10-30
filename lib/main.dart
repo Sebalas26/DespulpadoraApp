@@ -99,7 +99,7 @@ class AuthGate extends StatelessWidget {
   Widget build(BuildContext context) {
     return BlocBuilder<AuthCubit, AuthState>(
       builder: (context, state) {
-        if (state is AuthInitial || state is AuthLoading) {
+        if (state is AuthInitial) {
           return const Scaffold(
             backgroundColor: AppColors.background,
             body: Center(

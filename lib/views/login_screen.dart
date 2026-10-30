@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_formKey.currentState?.validate() ?? false) {
       context.read<AuthCubit>().login(
             usernameOrEmail: _userController.text.trim(),
-            password: _passwordController.text,
+            password: _passwordController.text.trim(),
             rememberSession: _rememberSession,
           );
     }
@@ -281,6 +281,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           const SizedBox(height: 6),
                           TextFormField(
                             controller: _userController,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            textCapitalization: TextCapitalization.none,
                             style: GoogleFonts.lato(
                               fontSize: 14.5,
                               color: const Color(0xFF111827),
@@ -353,6 +356,9 @@ class _LoginScreenState extends State<LoginScreen> {
                           TextFormField(
                             controller: _passwordController,
                             obscureText: _obscurePassword,
+                            autocorrect: false,
+                            enableSuggestions: false,
+                            textCapitalization: TextCapitalization.none,
                             style: const TextStyle(
                               fontSize: 14.5,
                               color: Color(0xFF111827),
