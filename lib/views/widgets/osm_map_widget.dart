@@ -114,7 +114,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
 
   /// Retorna una coordenada válida del domiciliario dentro del territorio nacional.
   LatLng get _safeCourierLocation {
-    final loc = widget.courierLocation;
+    final LatLng loc = widget.courierLocation;
     if (loc.latitude >= -4.5 &&
         loc.latitude <= 13.5 &&
         loc.longitude >= -80.0 &&
@@ -122,6 +122,29 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
       return loc;
     }
     return const LatLng(4.69680, -74.09250);
+  }
+
+  /// Retorna una coordenada válida del destino activo dentro del territorio nacional.
+  LatLng get _safeDestinationLocation {
+    final LatLng dest = widget.destinationLocation;
+    if (dest.latitude >= -4.5 &&
+        dest.latitude <= 13.5 &&
+        dest.longitude >= -80.0 &&
+        dest.longitude <= -66.5) {
+      return dest;
+    }
+    return _safeCourierLocation;
+  }
+
+  /// Retorna una coordenada válida para una parada específica dentro del territorio nacional.
+  LatLng _safeStopLocation(OrderModel stop) {
+    if (stop.latitud >= -4.5 &&
+        stop.latitud <= 13.5 &&
+        stop.longitud >= -80.0 &&
+        stop.longitud <= -66.5) {
+      return LatLng(stop.latitud, stop.longitud);
+    }
+    return _safeDestinationLocation;
   }
 
   @override
@@ -213,11 +236,10 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
       );
       targetZoom = 15.55;
     } else {
+      final LatLng safeDest = _safeDestinationLocation;
       targetCenter = LatLng(
-        (courier.latitude * 0.78) +
-            (widget.destinationLocation.latitude * 0.22),
-        (courier.longitude * 0.78) +
-            (widget.destinationLocation.longitude * 0.22),
+        (courier.latitude * 0.78) + (safeDest.latitude * 0.22),
+        (courier.longitude * 0.78) + (safeDest.longitude * 0.22),
       );
       targetZoom = 15.45;
     }
@@ -259,13 +281,27 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
         widget.activeStopId != oldWidget.activeStopId &&
         widget.allStops != null) {
       try {
-        final target =
+        final OrderModel target =
             widget.allStops!.firstWhere((s) => s.id == widget.activeStopId);
-        _animateCameraTo(
-          LatLng(target.latitud, target.longitud),
-          widget.isNavigationMode ? 15.5 : 14.8,
-          duration: const Duration(milliseconds: 950),
-        );
+        final LatLng safeTarget = _safeStopLocation(target);
+        if (widget.isNavigationMode) {
+          final LatLng courier = _safeCourierLocation;
+          final LatLng navCenter = LatLng(
+            (courier.latitude * 0.65) + (safeTarget.latitude * 0.35),
+            (courier.longitude * 0.65) + (safeTarget.longitude * 0.35),
+          );
+          _animateCameraTo(
+            navCenter,
+            15.5,
+            duration: const Duration(milliseconds: 950),
+          );
+        } else {
+          _animateCameraTo(
+            safeTarget,
+            14.8,
+            duration: const Duration(milliseconds: 950),
+          );
+        }
       } catch (_) {}
     }
   }
@@ -299,15 +335,15 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
     if (widget.showCourierMarker) {
       pointsToFit.add(_safeCourierLocation);
     }
-    pointsToFit.add(widget.destinationLocation);
+    pointsToFit.add(_safeDestinationLocation);
 
     if (widget.showPlantaMatriz) {
       pointsToFit.add(_plantaMatriz);
     }
 
     if (widget.allStops != null) {
-      for (final stop in widget.allStops!) {
-        pointsToFit.add(LatLng(stop.latitud, stop.longitud));
+      for (final OrderModel stop in widget.allStops!) {
+        pointsToFit.add(_safeStopLocation(stop));
       }
     }
 
@@ -331,10 +367,11 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
 
   @override
   Widget build(BuildContext context) {
-    final courierLoc = _safeCourierLocation;
-    final centerPoint = LatLng(
-      (courierLoc.latitude + widget.destinationLocation.latitude) / 2,
-      (courierLoc.longitude + widget.destinationLocation.longitude) / 2,
+    final LatLng courierLoc = _safeCourierLocation;
+    final LatLng safeDestLoc = _safeDestinationLocation;
+    final LatLng centerPoint = LatLng(
+      (courierLoc.latitude + safeDestLoc.latitude) / 2,
+      (courierLoc.longitude + safeDestLoc.longitude) / 2,
     );
 
     final effectiveActiveLeg =
@@ -382,7 +419,7 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             TileLayer(
               urlTemplate: _selectedStyle.url,
               userAgentPackageName: ApiConfig.userAgentPackageName,
-              maxNativeZoom: 19,
+              maxNativeZoom: 18,
               maxZoom: _selectedStyle.maxZoom,
             ),
             if (widget.showPolyline &&
@@ -545,20 +582,23 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
 
   /// Construye la lista de marcadores enumerados para cada parada de la ruta.
   List<Marker> _buildMultiStopMarkers() {
-    final stops = widget.allStops!;
+    final List<OrderModel> stops = widget.allStops!;
     final List<Marker> markers = [];
 
     for (int i = 0; i < stops.length; i++) {
-      final stop = stops[i];
-      final seqNum = i + 1;
-      final isActive = widget.activeStopId == stop.id ||
+      final OrderModel stop = stops[i];
+      if (widget.isNavigationMode && stop.estado == OrderStatus.entregado) {
+        continue;
+      }
+      final int seqNum = i + 1;
+      final bool isActive = widget.activeStopId == stop.id ||
           (widget.activeStopId == null &&
               (stop.estado == OrderStatus.enCamino ||
                   stop.estado == OrderStatus.enPunto));
 
       markers.add(
         Marker(
-          point: LatLng(stop.latitud, stop.longitud),
+          point: _safeStopLocation(stop),
           width: isActive ? 140 : 48,
           height: isActive ? 68 : 48,
           child: GestureDetector(

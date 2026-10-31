@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:latlong2/latlong.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
+import '../services/location_service.dart';
 import '../services/websocket_service.dart';
 
 /// Categorías de filtrado de pedidos en la pantalla principal.
@@ -221,6 +223,9 @@ class OrdersCubit extends Cubit<OrdersState> {
   /// Último token JWT utilizado en las peticiones autenticadas.
   String? _lastToken;
 
+  /// Caché de coordenadas geocodificadas por identificador de pedido.
+  final Map<String, LatLng> _resolvedOrderCoords = <String, LatLng>{};
+
   /// Crea una instancia de [OrdersCubit] con inyección opcional de [ApiService] y [WebSocketService].
   OrdersCubit({ApiService? apiService, WebSocketService? wsService})
       : _apiService = apiService ?? ApiService(),
@@ -307,7 +312,19 @@ class OrdersCubit extends Cubit<OrdersState> {
         courierId: courierId,
         token: _lastToken,
       );
-      final List<OrderModel> orders = routeResponse.orders;
+      final List<OrderModel> rawOrders = routeResponse.orders;
+      final List<OrderModel> orders = rawOrders.map((OrderModel o) {
+        if (LocationService.isWithinColombia(o.latitud, o.longitud)) {
+          _resolvedOrderCoords[o.id] = LatLng(o.latitud, o.longitud);
+          return o;
+        }
+        final LatLng fallback =
+            _resolvedOrderCoords[o.id] ?? LocationService.defaultLocation;
+        return o.copyWith(
+          latitud: fallback.latitude,
+          longitud: fallback.longitude,
+        );
+      }).toList();
 
       String? turnId;
       bool routeAlreadyActive = state.isRouteActive;
@@ -347,6 +364,8 @@ class OrdersCubit extends Cubit<OrdersState> {
             ? routeResponse.assignedRouteZone
             : state.assignedRouteZone,
       ));
+
+      unawaited(_geocodeMissingOrders(rawOrders));
     } catch (e) {
       if (!isSilent) {
         emit(state.copyWith(
@@ -354,6 +373,48 @@ class OrdersCubit extends Cubit<OrdersState> {
           errorMessage: 'No se pudieron cargar los pedidos: $e',
         ));
       }
+    }
+  }
+
+  /// Geocodifica en segundo plano las paradas cuyas coordenadas originales no estaban registradas en Colombia.
+  Future<void> _geocodeMissingOrders(List<OrderModel> rawOrders) async {
+    try {
+      bool anyUpdated = false;
+      for (final OrderModel raw in rawOrders) {
+        if (LocationService.isWithinColombia(raw.latitud, raw.longitud)) {
+          continue;
+        }
+        if (_resolvedOrderCoords.containsKey(raw.id)) {
+          continue;
+        }
+        if (raw.direccion.trim().length < 4) {
+          continue;
+        }
+
+        final LatLng? geocoded =
+            await LocationService.geocodeColombiaAddress(raw.direccion);
+        if (geocoded != null && !isClosed) {
+          _resolvedOrderCoords[raw.id] = geocoded;
+          anyUpdated = true;
+        }
+      }
+
+      if (anyUpdated && !isClosed) {
+        final List<OrderModel> updatedList =
+            state.orders.map((OrderModel existing) {
+          final LatLng? resolved = _resolvedOrderCoords[existing.id];
+          if (resolved != null) {
+            return existing.copyWith(
+              latitud: resolved.latitude,
+              longitud: resolved.longitude,
+            );
+          }
+          return existing;
+        }).toList();
+        emit(state.copyWith(orders: updatedList));
+      }
+    } catch (_) {
+      return;
     }
   }
 

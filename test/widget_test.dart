@@ -13,6 +13,7 @@ import 'package:despulpadora_app/models/location_data_model.dart';
 import 'package:despulpadora_app/models/order_model.dart';
 import 'package:despulpadora_app/main.dart';
 import 'package:despulpadora_app/services/api_service.dart';
+import 'package:despulpadora_app/services/location_service.dart';
 import 'package:despulpadora_app/views/login_screen.dart';
 
 /// Suite integral de pruebas unitarias para modelos, servicios REST (`/api/mobile`) y Cubits.
@@ -547,6 +548,13 @@ void main() {
         expect(cubit.state.status, equals(OrdersLoadingStatus.success));
         expect(cubit.state.orders.length, equals(2));
         expect(cubit.state.orders.last.id, equals('ORD-0202'));
+        expect(
+          LocationService.isWithinColombia(
+            cubit.state.orders.last.latitud,
+            cubit.state.orders.last.longitud,
+          ),
+          isTrue,
+        );
         expect(cubit.state.isRouteReceived, isTrue);
         await cubit.close();
       },

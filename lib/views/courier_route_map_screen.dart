@@ -84,26 +84,35 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     return LocationService.defaultLocation;
   }
 
+  /// Garantiza que la coordenada de una parada sea válida dentro del área operativa.
+  LatLng _resolveStopLocation(OrderModel order, LatLng fallback) {
+    if (LocationService.isWithinColombia(order.latitud, order.longitud)) {
+      return LatLng(order.latitud, order.longitud);
+    }
+    return fallback;
+  }
+
   /// Recalcula el circuito multiparada y el tramo activo hacia la parada seleccionada.
   Future<void> _recalculateFullRoute({bool force = false}) async {
-    if (_isCalculatingRoute) return;
+    if (_isCalculatingRoute && !force) return;
 
     try {
-      final ordersState = context.read<OrdersCubit>().state;
-      final trackState = context.read<TrackingCubit>().state;
-      final courierLoc = _resolveCourierLocation(trackState.currentLocation);
-      final activeStop = ordersState.activeOrder;
+      final OrdersState ordersState = context.read<OrdersCubit>().state;
+      final TrackingState trackState = context.read<TrackingCubit>().state;
+      final LatLng courierLoc =
+          _resolveCourierLocation(trackState.currentLocation);
+      final OrderModel? activeStop = ordersState.activeOrder;
 
-      final pendingStops = ordersState.orders
-          .where((o) =>
+      final List<OrderModel> pendingStops = ordersState.orders
+          .where((OrderModel o) =>
               o.estado != OrderStatus.entregado &&
               o.estado != OrderStatus.novedad)
           .toList();
 
-      final signature =
+      final String signature =
           '${courierLoc.latitude.toStringAsFixed(3)},${courierLoc.longitude.toStringAsFixed(3)}_'
           '${activeStop?.id ?? "none"}_'
-          '${ordersState.orders.map((o) => "${o.id}:${o.estado.name}").join("|")}';
+          '${ordersState.orders.map((OrderModel o) => "${o.id}:${o.estado.name}:${o.latitud.toStringAsFixed(4)},${o.longitud.toStringAsFixed(4)}").join("|")}';
 
       if (!force &&
           signature == _lastRouteSignature &&
@@ -114,22 +123,22 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       _isCalculatingRoute = true;
       _lastRouteSignature = signature;
 
-      final List<LatLng> waypoints = [
+      final List<LatLng> waypoints = <LatLng>[
         courierLoc,
-        ...(pendingStops.isNotEmpty
-            ? pendingStops.map((s) => LatLng(s.latitud, s.longitud))
-            : ordersState.orders.map((s) => LatLng(s.latitud, s.longitud))),
+        ...pendingStops.map((OrderModel s) => _resolveStopLocation(s, courierLoc)),
       ];
 
-      final multiRoute = await _routingService.getMultiStopRoute(
-        waypoints: waypoints,
-      );
+      final MultiStopRouteData? multiRoute = waypoints.length > 1
+          ? await _routingService.getMultiStopRoute(
+              waypoints: waypoints,
+            )
+          : null;
 
       RouteData? legData;
-      if (activeStop != null) {
+      if (activeStop != null && activeStop.estado != OrderStatus.entregado) {
         legData = await _routingService.getRoute(
           start: courierLoc,
-          end: LatLng(activeStop.latitud, activeStop.longitud),
+          end: _resolveStopLocation(activeStop, courierLoc),
         );
       }
 
@@ -459,8 +468,8 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                 trackState.currentLocation,
               );
 
-              final destLatLng = activeOrder != null
-                  ? LatLng(activeOrder.latitud, activeOrder.longitud)
+              final LatLng destLatLng = activeOrder != null
+                  ? _resolveStopLocation(activeOrder, courierLatLng)
                   : courierLatLng;
 
               final activeStopIndex = activeOrder != null
@@ -660,25 +669,32 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.alt_route_rounded,
-                      size: 16,
-                      color: AppColors.primary,
-                    ),
-                    const SizedBox(width: 6),
-                    Text(
-                      'SECUENCIA DE ENRUTADO (${ordersState.totalCount} PARADAS)',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
+                Expanded(
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.alt_route_rounded,
+                        size: 16,
                         color: AppColors.primary,
-                        letterSpacing: 0.4,
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 6),
+                      Flexible(
+                        child: Text(
+                          'SECUENCIA DE ENRUTADO (${ordersState.totalCount} PARADAS)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.primary,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
+                const SizedBox(width: 8),
                 InkWell(
                   onTap: () =>
                       setState(() => _showAllStopsList = !_showAllStopsList),
@@ -771,48 +787,55 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFFEF08A),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFFDE047)),
-                    ),
-                    child: Text(
-                      'PARADA #$stopIndex DE $totalStops',
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w900,
+              Flexible(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF08A),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFFDE047)),
+                      ),
+                      child: Text(
+                        'PARADA #$stopIndex DE $totalStops',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: order.estadoColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      order.estadoLabel.toUpperCase(),
-                      style: TextStyle(
-                        color: order.estadoColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: order.estadoColor.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          order.estadoLabel.toUpperCase(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: order.estadoColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
+              const SizedBox(width: 8),
               Text(
                 order.montoFormatted,
                 style: const TextStyle(
