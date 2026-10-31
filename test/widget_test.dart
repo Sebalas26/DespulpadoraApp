@@ -496,6 +496,63 @@ void main() {
     );
 
     test(
+      'OrdersCubit.refreshOrdersLive actualiza nuevos pedidos en vivo sin activar isLoading y preservando isRouteReceived',
+      () async {
+        int fetchCount = 0;
+        final mockClient = MockClient((request) async {
+          if (request.url.path.endsWith('/orders/assigned')) {
+            fetchCount += 1;
+            final orders = <Map<String, dynamic>>[
+              {
+                'id': 201,
+                'orderCode': 'ORD-0201',
+                'clientName': 'Cliente Inicial',
+                'clientAddress': 'Dir 1',
+                'total': 30000,
+                'status': 'EnRuta',
+                'items': [],
+              },
+              if (fetchCount >= 2)
+                {
+                  'id': 202,
+                  'orderCode': 'ORD-0202',
+                  'clientName': 'Cliente Nuevo En Vivo',
+                  'clientAddress': 'Dir 2',
+                  'total': 45000,
+                  'status': 'Asignado',
+                  'items': [],
+                },
+            ];
+            return http.Response(
+              jsonEncode({
+                'hasAssignedRoute': true,
+                'isRouteReceived': fetchCount == 1,
+                'assignedRouteCode': 'RUT-05',
+                'assignedRouteZone': 'Centro',
+                'orders': orders,
+              }),
+              200,
+            );
+          }
+          return http.Response(jsonEncode({'ok': true}), 200);
+        });
+
+        final cubit = OrdersCubit(apiService: ApiService(client: mockClient));
+        await cubit.loadOrders(courierId: '5', token: 'jwt_abc');
+        expect(cubit.state.orders.length, equals(1));
+        expect(cubit.state.isRouteReceived, isTrue);
+        expect(cubit.state.assignedRouteCode, equals('RUT-05'));
+
+        await cubit.refreshOrdersLive();
+        expect(cubit.state.status, equals(OrdersLoadingStatus.success));
+        expect(cubit.state.orders.length, equals(2));
+        expect(cubit.state.orders.last.id, equals('ORD-0202'));
+        expect(cubit.state.isRouteReceived, isTrue);
+        await cubit.close();
+      },
+    );
+
+    test(
       'ApiConfig extrae la versión desde pubspec.yaml y ApiService traduce errores en inglés al español',
       () async {
         expect(

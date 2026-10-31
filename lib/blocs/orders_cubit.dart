@@ -1,6 +1,8 @@
+import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/order_model.dart';
 import '../services/api_service.dart';
+import '../services/websocket_service.dart';
 
 /// Categorías de filtrado de pedidos en la pantalla principal.
 enum OrdersFilter {
@@ -201,33 +203,116 @@ class OrdersCubit extends Cubit<OrdersState> {
   /// Servicio de comunicación HTTP con el backend.
   final ApiService _apiService;
 
+  /// Servicio opcional de WebSocket para recibir actualizaciones en vivo de rutas y pedidos.
+  final WebSocketService? _wsService;
+
+  /// Suscripción al flujo de mensajes entrantes del WebSocket.
+  StreamSubscription<Map<String, dynamic>>? _wsMessagesSubscription;
+
+  /// Temporizador de sincronización silenciosa periódica en segundo plano.
+  Timer? _liveSyncTimer;
+
+  /// Temporizador de verificación diferida tras evento WebSocket.
+  Timer? _followUpSyncTimer;
+
   /// Último identificador de domiciliario utilizado en la carga de ruta.
   String? _lastCourierId;
 
   /// Último token JWT utilizado en las peticiones autenticadas.
   String? _lastToken;
 
-  /// Crea una instancia de [OrdersCubit] con inyección opcional de [ApiService].
-  OrdersCubit({ApiService? apiService})
+  /// Crea una instancia de [OrdersCubit] con inyección opcional de [ApiService] y [WebSocketService].
+  OrdersCubit({ApiService? apiService, WebSocketService? wsService})
       : _apiService = apiService ?? ApiService(),
-        super(const OrdersState());
+        _wsService = wsService,
+        super(const OrdersState()) {
+    _wsMessagesSubscription =
+        _wsService?.incomingMessagesStream.listen(_handleIncomingWsMessage);
+  }
+
+  /// Procesa los eventos WebSocket entrantes para refrescar la ruta y pedidos en vivo.
+  void _handleIncomingWsMessage(Map<String, dynamic> message) {
+    try {
+      final String eventName =
+          (message['event'] ?? message['type'] ?? '').toString().toLowerCase();
+      if (eventName.isEmpty ||
+          eventName == 'pong' ||
+          eventName == 'ping' ||
+          eventName == 'location_ack' ||
+          eventName == 'courier_location_update') {
+        return;
+      }
+
+      refreshOrdersLive();
+      _followUpSyncTimer?.cancel();
+      _followUpSyncTimer = Timer(const Duration(milliseconds: 750), () {
+        refreshOrdersLive();
+      });
+    } catch (_) {
+      return;
+    }
+  }
+
+  /// Inicia la sincronización periódica silenciosa en segundo plano mientras exista sesión activa.
+  void _ensureLiveSyncActive() {
+    try {
+      _wsService?.connect();
+      if (_liveSyncTimer != null && _liveSyncTimer!.isActive) return;
+      _liveSyncTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        refreshOrdersLive();
+      });
+    } catch (_) {
+      return;
+    }
+  }
 
   /// Consulta la ruta y los pedidos asignados al domiciliario desde `/api/mobile/orders/assigned`.
   Future<void> loadOrders({required String courierId, String? token}) async {
-    _lastCourierId = courierId;
-    _lastToken = token ?? _lastToken;
-    emit(state.copyWith(status: OrdersLoadingStatus.loading));
     try {
-      final routeResponse = await _apiService.fetchAssignedRoute(
+      _lastCourierId = courierId;
+      _lastToken = token ?? _lastToken;
+      _ensureLiveSyncActive();
+      emit(state.copyWith(status: OrdersLoadingStatus.loading));
+      await _fetchAndApplyOrders(courierId: courierId, isSilent: false);
+    } catch (e) {
+      emit(state.copyWith(
+        status: OrdersLoadingStatus.error,
+        errorMessage: 'No se pudieron cargar los pedidos: $e',
+      ));
+    }
+  }
+
+  /// Refresca silenciosamente en vivo la ruta y los pedidos asignados sin mostrar pantalla de carga.
+  Future<void> refreshOrdersLive({String? courierId, String? token}) async {
+    try {
+      final String? effectiveCourierId = courierId ?? _lastCourierId;
+      if (effectiveCourierId == null || effectiveCourierId.isEmpty) return;
+      if (token != null) {
+        _lastToken = token;
+      }
+      await _fetchAndApplyOrders(courierId: effectiveCourierId, isSilent: true);
+    } catch (_) {
+      return;
+    }
+  }
+
+  /// Obtiene la ruta asignada del backend y actualiza el estado preservando el progreso en vivo.
+  Future<void> _fetchAndApplyOrders({
+    required String courierId,
+    required bool isSilent,
+  }) async {
+    try {
+      final AssignedRouteResponse routeResponse =
+          await _apiService.fetchAssignedRoute(
         courierId: courierId,
         token: _lastToken,
       );
-      final orders = routeResponse.orders;
+      final List<OrderModel> orders = routeResponse.orders;
 
       String? turnId;
       bool routeAlreadyActive = state.isRouteActive;
       bool anyProgress = false;
-      for (final o in orders) {
+      for (final OrderModel o in orders) {
         if (o.estado != OrderStatus.asignado) {
           anyProgress = true;
         }
@@ -242,8 +327,8 @@ class OrdersCubit extends Cubit<OrdersState> {
         }
       }
 
-      final hasRoute = routeResponse.hasAssignedRoute || orders.isNotEmpty;
-      final isReceived = hasRoute &&
+      final bool hasRoute = routeResponse.hasAssignedRoute || orders.isNotEmpty;
+      final bool isReceived = hasRoute &&
           (routeResponse.isRouteReceived ||
               state.isRouteReceived ||
               anyProgress);
@@ -263,10 +348,12 @@ class OrdersCubit extends Cubit<OrdersState> {
             : state.assignedRouteZone,
       ));
     } catch (e) {
-      emit(state.copyWith(
-        status: OrdersLoadingStatus.error,
-        errorMessage: 'No se pudieron cargar los pedidos: $e',
-      ));
+      if (!isSilent) {
+        emit(state.copyWith(
+          status: OrdersLoadingStatus.error,
+          errorMessage: 'No se pudieron cargar los pedidos: $e',
+        ));
+      }
     }
   }
 
@@ -516,5 +603,16 @@ class OrdersCubit extends Cubit<OrdersState> {
     } catch (_) {
       return false;
     }
+  }
+
+  /// Libera las suscripciones y temporizadores de sincronización en vivo al cerrar el Cubit.
+  @override
+  Future<void> close() {
+    try {
+      _wsMessagesSubscription?.cancel();
+      _liveSyncTimer?.cancel();
+      _followUpSyncTimer?.cancel();
+    } catch (_) {}
+    return super.close();
   }
 }

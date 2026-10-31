@@ -69,7 +69,10 @@ class _PulpasProAppState extends State<PulpasProApp> {
               AuthCubit(apiService: _apiService)..checkStoredSession(),
         ),
         BlocProvider<OrdersCubit>(
-          create: (_) => OrdersCubit(apiService: _apiService),
+          create: (_) => OrdersCubit(
+            apiService: _apiService,
+            wsService: _wsService,
+          ),
         ),
         BlocProvider<TrackingCubit>(
           create: (_) => TrackingCubit(
