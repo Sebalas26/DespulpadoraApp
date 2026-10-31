@@ -50,6 +50,9 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
   /// Indica si el panel inferior muestra la lista completa de paradas o la parada activa.
   bool _showAllStopsList = false;
 
+  /// Indica si el mapa se muestra expandido a pantalla completa con botones flotantes.
+  bool _isMapFullScreen = false;
+
   /// Contador incremental para activar el acercamiento de cámara estilo navegación.
   int _navigationZoomTrigger = 0;
 
@@ -60,9 +63,27 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<OrdersCubit>().focusCurrentTurnStop();
+      _syncTrackingWithRouteState();
       _recalculateFullRoute(force: true);
     });
+  }
+
+  /// Sincroniza la transmisión de ubicación GPS según si la ruta continúa activa con entregas pendientes.
+  void _syncTrackingWithRouteState() {
+    try {
+      if (!mounted) return;
+      final courier = context.read<AuthCubit>().currentCourier;
+      final ordersState = context.read<OrdersCubit>().state;
+      context.read<TrackingCubit>().syncWithShiftStatus(
+            courier: courier,
+            activeOrderId: ordersState.activeOrderId,
+            isRouteInProgress: ordersState.isDeliveringInRoute,
+          );
+    } catch (_) {
+      return;
+    }
   }
 
   /// Formatea un valor numérico en moneda colombiana (COP).
@@ -245,18 +266,34 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 subtitle: const Text('Tráfico en vivo y alertas viales'),
+                trailing: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary,
+                ),
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   try {
-                    final wazeUri = Uri.parse(
-                      'https://waze.com/ul?ll=${order.latitud},${order.longitud}&navigate=yes',
+                    final bool isDefaultFallback =
+                        (order.latitud - LocationService.defaultLocation.latitude)
+                                    .abs() <
+                                0.0001 &&
+                            (order.longitud -
+                                        LocationService
+                                            .defaultLocation.longitude)
+                                    .abs() <
+                                0.0001;
+                    final String addressQuery = Uri.encodeComponent(
+                      '${order.direccion}, ${order.barrio}, Bogotá, Colombia',
                     );
-                    if (await canLaunchUrl(wazeUri)) {
-                      await launchUrl(
-                        wazeUri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    }
+                    final Uri wazeUri = Uri.parse(
+                      isDefaultFallback && order.direccion.trim().isNotEmpty
+                          ? 'https://waze.com/ul?q=$addressQuery&navigate=yes'
+                          : 'https://waze.com/ul?ll=${order.latitud},${order.longitud}&navigate=yes',
+                    );
+                    await launchUrl(
+                      wazeUri,
+                      mode: LaunchMode.externalApplication,
+                    );
                   } catch (_) {}
                 },
               ),
@@ -279,18 +316,35 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   style: TextStyle(fontWeight: FontWeight.w700),
                 ),
                 subtitle: const Text('Ruta paso a paso con voz'),
+                trailing: const Icon(
+                  Icons.chevron_right_rounded,
+                  color: AppColors.textSecondary,
+                ),
                 onTap: () async {
                   Navigator.of(ctx).pop();
                   try {
-                    final gmapsUri = Uri.parse(
-                      'https://www.google.com/maps/dir/?api=1&destination=${order.latitud},${order.longitud}',
+                    final bool isDefaultFallback =
+                        (order.latitud - LocationService.defaultLocation.latitude)
+                                    .abs() <
+                                0.0001 &&
+                            (order.longitud -
+                                        LocationService
+                                            .defaultLocation.longitude)
+                                    .abs() <
+                                0.0001;
+                    final String destParam =
+                        isDefaultFallback && order.direccion.trim().isNotEmpty
+                            ? Uri.encodeComponent(
+                                '${order.direccion}, ${order.barrio}, Bogotá, Colombia',
+                              )
+                            : '${order.latitud},${order.longitud}';
+                    final Uri gmapsUri = Uri.parse(
+                      'https://www.google.com/maps/dir/?api=1&destination=$destParam',
                     );
-                    if (await canLaunchUrl(gmapsUri)) {
-                      await launchUrl(
-                        gmapsUri,
-                        mode: LaunchMode.externalApplication,
-                      );
-                    }
+                    await launchUrl(
+                      gmapsUri,
+                      mode: LaunchMode.externalApplication,
+                    );
                   } catch (_) {}
                 },
               ),
@@ -308,6 +362,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       final token = context.read<AuthCubit>().currentCourier?.token;
       await context.read<OrdersCubit>().startRoute(order.id, token: token);
       if (mounted) {
+        _syncTrackingWithRouteState();
         setState(() {
           _isLoadingAction = false;
           _navigationZoomTrigger++;
@@ -352,6 +407,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   notes: notes,
                 );
             if (mounted) {
+              _syncTrackingWithRouteState();
               setState(() => _isLoadingAction = false);
               _recalculateFullRoute(force: true);
               final nextTurn =
@@ -393,6 +449,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   token: token,
                 );
             if (mounted) {
+              _syncTrackingWithRouteState();
               setState(() => _isLoadingAction = false);
               _recalculateFullRoute(force: true);
               final nextTurn =
@@ -442,9 +499,13 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   ),
                 ),
                 const SizedBox(width: 6),
-                const Text(
-                  'Enrutado en Vivo',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                const Flexible(
+                  child: Text(
+                    'Enrutado en Vivo',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                  ),
                 ),
               ],
             ),
@@ -457,10 +518,77 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
             ),
           ],
         ),
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 12),
+            child: Center(
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    if (_isMapFullScreen) {
+                      _isMapFullScreen = false;
+                      _showAllStopsList = true;
+                    } else {
+                      _showAllStopsList = !_showAllStopsList;
+                    }
+                  });
+                },
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: _showAllStopsList && !_isMapFullScreen
+                        ? AppColors.primary
+                        : AppColors.primarySoft,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primaryBorder),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _showAllStopsList && !_isMapFullScreen
+                            ? Icons.gps_fixed_rounded
+                            : Icons.format_list_numbered_rounded,
+                        size: 13.5,
+                        color: _showAllStopsList && !_isMapFullScreen
+                            ? Colors.white
+                            : AppColors.primary,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        _showAllStopsList && !_isMapFullScreen
+                            ? 'Ver Parada Activa'
+                            : 'Ver Lista Completa',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: _showAllStopsList && !_isMapFullScreen
+                              ? Colors.white
+                              : AppColors.primary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
-      body: BlocBuilder<OrdersCubit, OrdersState>(
+      body: BlocConsumer<OrdersCubit, OrdersState>(
+        listener: (context, ordersState) {
+          _syncTrackingWithRouteState();
+        },
         builder: (context, ordersState) {
           final activeOrder = ordersState.activeOrder;
+          final bool canConfirmActiveDelivery = activeOrder != null &&
+              ordersState.isOrderUnlocked(activeOrder.id) &&
+              activeOrder.estado != OrderStatus.entregado &&
+              activeOrder.estado != OrderStatus.novedad;
 
           return BlocBuilder<TrackingCubit, TrackingState>(
             builder: (context, trackState) {
@@ -485,31 +613,91 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               final legEtaLabel = _activeLegData?.durationMinutes ??
                   _locationService.estimateEtaMinutes(straightDist);
 
+              final Widget mapView = OsmMapWidget(
+                courierLocation: courierLatLng,
+                destinationLocation: destLatLng,
+                destinationTitle:
+                    activeOrder?.clienteNombre ?? 'Punto de Entrega',
+                courierPlate: plateDisplay,
+                heading: trackState.heading,
+                showPlantaMatriz: false,
+                isNavigationMode: true,
+                navigationZoomTrigger: _navigationZoomTrigger,
+                stopSequenceNumber: activeStopIndex,
+                routePoints: _activeLegPoints,
+                fullRoutePoints: _multiRouteData?.fullPoints,
+                allStops: ordersState.orders,
+                activeStopId: activeOrder?.id,
+                isFullScreen: _isMapFullScreen,
+                bottomControlsOffset:
+                    _isMapFullScreen && canConfirmActiveDelivery ? 86.0 : 18.0,
+                onToggleFullScreen: () {
+                  setState(() {
+                    _isMapFullScreen = !_isMapFullScreen;
+                  });
+                },
+                onStopTap: (tappedOrder) {
+                  context.read<OrdersCubit>().selectStop(tappedOrder.id);
+                  _recalculateFullRoute(force: true);
+                },
+              );
+
+              if (_isMapFullScreen) {
+                return Stack(
+                  children: [
+                    Positioned.fill(child: mapView),
+                    if (canConfirmActiveDelivery)
+                      Positioned(
+                        left: 20,
+                        right: 20,
+                        bottom: 20,
+                        child: Center(
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 340),
+                            child: SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                key: const Key('btn_floating_confirm_delivery'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.primary,
+                                  foregroundColor: Colors.white,
+                                  elevation: 6,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                    horizontal: 18,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.check_circle_rounded,
+                                  size: 20,
+                                ),
+                                label: const Text(
+                                  'Confirmar Entrega',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                onPressed: () =>
+                                    _openConfirmDeliveryDialog(activeOrder),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              }
+
               return Column(
                 children: [
                   _buildPwaTelemetryHeader(ordersState),
                   Expanded(
                     flex: _showAllStopsList ? 5 : 6,
-                    child: OsmMapWidget(
-                      courierLocation: courierLatLng,
-                      destinationLocation: destLatLng,
-                      destinationTitle:
-                          activeOrder?.clienteNombre ?? 'Punto de Entrega',
-                      courierPlate: plateDisplay,
-                      heading: trackState.heading,
-                      showPlantaMatriz: false,
-                      isNavigationMode: true,
-                      navigationZoomTrigger: _navigationZoomTrigger,
-                      stopSequenceNumber: activeStopIndex,
-                      routePoints: _activeLegPoints,
-                      fullRoutePoints: _multiRouteData?.fullPoints,
-                      allStops: ordersState.orders,
-                      activeStopId: activeOrder?.id,
-                      onStopTap: (tappedOrder) {
-                        context.read<OrdersCubit>().selectStop(tappedOrder.id);
-                        _recalculateFullRoute(force: true);
-                      },
-                    ),
+                    child: mapView,
                   ),
                   Expanded(
                     flex: _showAllStopsList ? 6 : 4,
@@ -661,88 +849,6 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       ),
       child: Column(
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.alt_route_rounded,
-                        size: 16,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text(
-                          'SECUENCIA DE ENRUTADO (${ordersState.totalCount} PARADAS)',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.primary,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                InkWell(
-                  onTap: () =>
-                      setState(() => _showAllStopsList = !_showAllStopsList),
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 9,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: _showAllStopsList
-                          ? AppColors.primary
-                          : AppColors.primarySoft,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: AppColors.primaryBorder),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          _showAllStopsList
-                              ? Icons.gps_fixed_rounded
-                              : Icons.format_list_numbered_rounded,
-                          size: 13,
-                          color: _showAllStopsList
-                              ? Colors.white
-                              : AppColors.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          _showAllStopsList
-                              ? 'Ver Parada Activa'
-                              : 'Ver Lista Completa',
-                          style: TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                            color: _showAllStopsList
-                                ? Colors.white
-                                : AppColors.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
           Expanded(
             child: _showAllStopsList
                 ? _buildFullSequenceListView(ordersState, activeOrder)
@@ -780,59 +886,24 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
         : 1;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Flexible(
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 9,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFEF08A),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: const Color(0xFFFDE047)),
-                      ),
-                      child: Text(
-                        'PARADA #$stopIndex DE $totalStops',
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w900,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: order.estadoColor.withValues(alpha: 0.12),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          order.estadoLabel.toUpperCase(),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            color: order.estadoColor,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
+              Expanded(
+                child: Text(
+                  order.clienteNombre,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               const SizedBox(width: 8),
@@ -846,18 +917,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Text(
-            order.clienteNombre,
-            style: const TextStyle(
-              fontSize: 15.5,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 2),
+          const SizedBox(height: 4),
           Row(
             children: [
               const Icon(
@@ -913,7 +973,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               Expanded(
                 child: _buildQuickActionChip(
                   icon: Icons.receipt_long_rounded,
-                  label: 'Pulpas',
+                  label: 'Pedido',
                   color: AppColors.textPrimary,
                   onTap: () {
                     OrderItemsDialog.show(
@@ -1134,7 +1194,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
           width: double.infinity,
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.statusEnPunto,
+              backgroundColor: AppColors.primary,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
               shape: RoundedRectangleBorder(
@@ -1142,9 +1202,9 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ),
             ),
             icon: const Icon(Icons.location_on_rounded, size: 19),
-            label: Text(
-              'Llegué a la Parada #$stopIndex • ${order.direccion}',
-              style: const TextStyle(
+            label: const Text(
+              'Llegué al punto',
+              style: TextStyle(
                 fontSize: 13.5,
                 fontWeight: FontWeight.w800,
               ),

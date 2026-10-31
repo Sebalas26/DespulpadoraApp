@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../config/theme.dart';
 import '../../models/order_model.dart';
+import '../../services/api_service.dart';
 
 /// Opción de método de pago disponible durante la confirmación de entrega.
 class PaymentMethodOption {
@@ -57,8 +58,8 @@ class DeliveryConfirmationDialog extends StatefulWidget {
 /// Estado interno de [DeliveryConfirmationDialog] que gestiona los campos de recaudo y receptor.
 class _DeliveryConfirmationDialogState
     extends State<DeliveryConfirmationDialog> {
-  /// Catálogo de medios de pago habilitados para confirmación en punto.
-  static const List<PaymentMethodOption> _paymentOptions = [
+  /// Catálogo base de medios de pago mientras se sincronizan los parámetros del sistema.
+  static const List<PaymentMethodOption> _defaultPaymentOptions = [
     PaymentMethodOption(
       id: 'Efectivo',
       label: 'Efectivo',
@@ -96,6 +97,9 @@ class _DeliveryConfirmationDialogState
     ),
   ];
 
+  /// Lista reactiva de opciones de pago configuradas en Parámetros del Sistema.
+  List<PaymentMethodOption> _paymentOptions = _defaultPaymentOptions;
+
   /// Controlador para el monto recibido en efectivo.
   late final TextEditingController _cashController;
 
@@ -111,7 +115,10 @@ class _DeliveryConfirmationDialogState
   @override
   void initState() {
     super.initState();
-    _selectedPaymentMethod = _detectInitialMethod(widget.order.metodoPago);
+    _selectedPaymentMethod = _detectInitialMethod(
+      widget.order.metodoPago,
+      _paymentOptions,
+    );
     _cashController = TextEditingController(
       text: widget.order.montoTotal.toInt().toString(),
     );
@@ -119,20 +126,141 @@ class _DeliveryConfirmationDialogState
       text: widget.order.clienteNombre,
     );
     _notesController = TextEditingController();
+    _loadConfiguredPaymentMethods();
   }
 
-  /// Determina la opción de pago inicial a partir del método configurado en la orden.
-  String _detectInitialMethod(String rawMethod) {
-    final lower = rawMethod.toLowerCase();
-    if (lower.contains('nequi')) return 'Nequi';
-    if (lower.contains('bancolombia') || lower.contains('transferencia')) {
-      return 'Bancolombia';
+  /// Carga dinámicamente los métodos de pago activos desde `/api/payment-methods`.
+  Future<void> _loadConfiguredPaymentMethods() async {
+    try {
+      final rawMethods = await ApiService().fetchActivePaymentMethods();
+      if (!mounted || rawMethods.isEmpty) return;
+
+      final mapped = rawMethods
+          .map(_buildOptionFromApi)
+          .where((opt) => opt.label.trim().isNotEmpty)
+          .toList();
+
+      if (mapped.isEmpty) return;
+
+      setState(() {
+        _paymentOptions = mapped;
+        final exists = _paymentOptions.any(
+          (opt) => opt.id.toLowerCase() == _selectedPaymentMethod.toLowerCase(),
+        );
+        if (!exists) {
+          _selectedPaymentMethod = _detectInitialMethod(
+            widget.order.metodoPago,
+            _paymentOptions,
+          );
+        } else {
+          _selectedPaymentMethod = _paymentOptions
+              .firstWhere(
+                (opt) =>
+                    opt.id.toLowerCase() ==
+                    _selectedPaymentMethod.toLowerCase(),
+              )
+              .id;
+        }
+      });
+    } catch (_) {}
+  }
+
+  /// Construye un [PaymentMethodOption] con estilo visual apropiado según el registro del backend.
+  PaymentMethodOption _buildOptionFromApi(Map<String, dynamic> raw) {
+    final name = (raw['name'] ?? raw['code'] ?? '').toString().trim();
+    final lower = name.toLowerCase();
+    final requiresRef = (raw['requiresReference'] ?? false) == true;
+
+    if (lower.contains('efectivo') || lower.contains('cash')) {
+      return PaymentMethodOption(
+        id: name,
+        label: name,
+        subtitle: 'Recaudo en billetes/monedas',
+        icon: Icons.payments_outlined,
+        color: const Color(0xFF1E5E3A),
+      );
     }
-    if (lower.contains('daviplata')) return 'Daviplata';
+    if (lower.contains('nequi')) {
+      return PaymentMethodOption(
+        id: name,
+        label: name,
+        subtitle: 'Transferencia verificada',
+        icon: Icons.phone_android_rounded,
+        color: const Color(0xFF7C3AED),
+      );
+    }
+    if (lower.contains('bancolombia') ||
+        lower.contains('banco') ||
+        lower.contains('transferencia')) {
+      return PaymentMethodOption(
+        id: name,
+        label: name,
+        subtitle: 'Transferencia / QR',
+        icon: Icons.account_balance_rounded,
+        color: const Color(0xFF2563EB),
+      );
+    }
+    if (lower.contains('daviplata')) {
+      return PaymentMethodOption(
+        id: name,
+        label: name,
+        subtitle: 'Billetera digital',
+        icon: Icons.qr_code_2_rounded,
+        color: const Color(0xFFDC2626),
+      );
+    }
     if (lower.contains('crédito') || lower.contains('credito')) {
-      return 'Crédito';
+      return PaymentMethodOption(
+        id: name,
+        label: name,
+        subtitle: 'Cuenta por cobrar autorizada',
+        icon: Icons.receipt_long_rounded,
+        color: const Color(0xFFD97706),
+      );
     }
-    return 'Efectivo';
+    return PaymentMethodOption(
+      id: name,
+      label: name,
+      subtitle: requiresRef ? 'Requiere comprobante' : 'Medio de pago activo',
+      icon: Icons.account_balance_wallet_rounded,
+      color: const Color(0xFF0D9488),
+    );
+  }
+
+  /// Determina la opción de pago inicial a partir del método configurado en la orden y las opciones disponibles.
+  String _detectInitialMethod(
+    String rawMethod,
+    List<PaymentMethodOption> options,
+  ) {
+    if (options.isEmpty) return 'Efectivo';
+    final lower = rawMethod.trim().toLowerCase();
+
+    for (final opt in options) {
+      final optLower = opt.id.toLowerCase();
+      if (optLower == lower ||
+          (lower.isNotEmpty &&
+              (lower.contains(optLower) || optLower.contains(lower)))) {
+        return opt.id;
+      }
+    }
+
+    if (lower.contains('transferencia') || lower.contains('bancolombia')) {
+      for (final opt in options) {
+        final optLower = opt.id.toLowerCase();
+        if (optLower.contains('bancolombia') ||
+            optLower.contains('transferencia')) {
+          return opt.id;
+        }
+      }
+    }
+
+    for (final opt in options) {
+      if (opt.id.toLowerCase().contains('efectivo')) {
+        return opt.id;
+      }
+    }
+
+    return options.first.id;
   }
 
   @override
@@ -145,7 +273,11 @@ class _DeliveryConfirmationDialogState
 
   @override
   Widget build(BuildContext context) {
-    final isCashSelected = _selectedPaymentMethod == 'Efectivo';
+    final lowerSelected = _selectedPaymentMethod.toLowerCase();
+    final isCashSelected =
+        lowerSelected.contains('efectivo') || lowerSelected.contains('cash');
+    final isCreditSelected =
+        lowerSelected.contains('crédito') || lowerSelected.contains('credito');
 
     return Dialog(
       backgroundColor: AppColors.surface,
@@ -360,7 +492,7 @@ class _DeliveryConfirmationDialogState
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        _selectedPaymentMethod == 'Crédito'
+                        isCreditSelected
                             ? 'Se registrará como cuenta por cobrar a crédito.'
                             : 'Verifica el comprobante de pago por $_selectedPaymentMethod antes de entregar.',
                         style: const TextStyle(

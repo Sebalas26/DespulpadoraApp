@@ -106,6 +106,9 @@ class OrdersState {
           o.estado == OrderStatus.enPunto)
       .length;
 
+  /// Indica si el domiciliario tiene una ruta iniciada con paradas aún en proceso de entrega.
+  bool get isDeliveringInRoute => isRouteActive && pendingCount > 0;
+
   /// Monto total pendiente por recaudar en efectivo.
   double get totalCashToCollect => orders
       .where((o) =>
@@ -345,6 +348,11 @@ class OrdersCubit extends Cubit<OrdersState> {
       }
 
       final bool hasRoute = routeResponse.hasAssignedRoute || orders.isNotEmpty;
+      final bool hasPendingOrders = orders.any(
+        (OrderModel o) =>
+            o.estado != OrderStatus.entregado &&
+            o.estado != OrderStatus.novedad,
+      );
       final bool isReceived = hasRoute &&
           (routeResponse.isRouteReceived ||
               state.isRouteReceived ||
@@ -354,7 +362,8 @@ class OrdersCubit extends Cubit<OrdersState> {
         status: OrdersLoadingStatus.success,
         orders: orders,
         activeOrderId: turnId ?? (orders.isNotEmpty ? orders.first.id : null),
-        isRouteActive: hasRoute ? routeAlreadyActive : false,
+        isRouteActive:
+            (hasRoute && hasPendingOrders) ? routeAlreadyActive : false,
         hasAssignedRoute: hasRoute,
         isRouteReceived: isReceived,
         assignedRouteCode: routeResponse.assignedRouteCode.isNotEmpty
@@ -573,10 +582,16 @@ class OrdersCubit extends Cubit<OrdersState> {
       }).toList();
 
       final nextActiveId = _findNextSequentialOrderId(updatedOrders);
+      final bool hasRemainingPending = updatedOrders.any(
+        (OrderModel o) =>
+            o.estado != OrderStatus.entregado &&
+            o.estado != OrderStatus.novedad,
+      );
 
       emit(state.copyWith(
         orders: updatedOrders,
         activeOrderId: nextActiveId,
+        isRouteActive: hasRemainingPending ? state.isRouteActive : false,
       ));
       return true;
     } catch (_) {
@@ -645,7 +660,14 @@ class OrdersCubit extends Cubit<OrdersState> {
       } else if (newStatus == OrderStatus.entregado ||
           newStatus == OrderStatus.novedad) {
         activeId = _findNextSequentialOrderId(updatedOrders);
-        if (activeId != null && routeActive) {
+        final bool hasRemainingPending = updatedOrders.any(
+          (OrderModel o) =>
+              o.estado != OrderStatus.entregado &&
+              o.estado != OrderStatus.novedad,
+        );
+        if (!hasRemainingPending) {
+          routeActive = false;
+        } else if (activeId != null && routeActive) {
           updatedOrders = updatedOrders.map((o) {
             if (o.id == activeId && o.estado == OrderStatus.asignado) {
               return o.copyWith(estado: OrderStatus.enCamino);

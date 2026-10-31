@@ -111,17 +111,22 @@ class TrackingCubit extends Cubit<TrackingState> {
     });
   }
 
-  /// Sincroniza el inicio o detención del rastreo GPS según el estado de turno del domiciliario.
+  /// Sincroniza el inicio o detención del rastreo GPS según el estado de turno y de ruta activa del domiciliario.
   void syncWithShiftStatus({
     required CourierModel? courier,
     required String? activeOrderId,
+    bool isRouteInProgress = false,
   }) {
-    _currentCourier = courier;
-    _activeOrderId = activeOrderId;
+    try {
+      _currentCourier = courier;
+      _activeOrderId = activeOrderId;
 
-    if (courier != null && courier.isOnline) {
-      startTracking();
-    } else {
+      if (courier != null && courier.isOnline && isRouteInProgress) {
+        startTracking();
+      } else {
+        stopTracking();
+      }
+    } catch (_) {
       stopTracking();
     }
   }

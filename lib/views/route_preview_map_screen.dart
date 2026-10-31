@@ -111,6 +111,7 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
       trackingCubit.syncWithShiftStatus(
         courier: authCubit.currentCourier?.copyWith(isOnline: true),
         activeOrderId: activeStop?.id ?? ordersCubit.state.activeOrderId,
+        isRouteInProgress: ordersCubit.state.isDeliveringInRoute,
       );
 
       if (mounted) {

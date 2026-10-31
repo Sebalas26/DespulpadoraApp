@@ -61,6 +61,12 @@ class OsmMapWidget extends StatefulWidget {
   /// Contador incremental para disparar el acercamiento de navegación.
   final int navigationZoomTrigger;
 
+  /// Indica si el mapa se encuentra expandido a pantalla completa.
+  final bool isFullScreen;
+
+  /// Callback opcional para alternar la visualización del mapa completo.
+  final VoidCallback? onToggleFullScreen;
+
   /// Crea una nueva instancia de [OsmMapWidget].
   const OsmMapWidget({
     super.key,
@@ -82,6 +88,8 @@ class OsmMapWidget extends StatefulWidget {
     this.bottomControlsOffset = 18.0,
     this.isNavigationMode = false,
     this.navigationZoomTrigger = 0,
+    this.isFullScreen = false,
+    this.onToggleFullScreen,
   });
 
   @override
@@ -498,11 +506,19 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
             children: [
               _buildMapControlFab(
                 heroTag: 'fab_fit_route',
-                icon: Icons.zoom_out_map_rounded,
-                tooltip: 'Encuadrar todo el enrutado',
+                icon: widget.onToggleFullScreen != null
+                    ? (widget.isFullScreen
+                        ? Icons.close_fullscreen_rounded
+                        : Icons.open_in_full_rounded)
+                    : Icons.zoom_out_map_rounded,
+                tooltip: widget.onToggleFullScreen != null
+                    ? (widget.isFullScreen
+                        ? 'Disminuir mapa'
+                        : 'Ver mapa completo')
+                    : 'Encuadrar todo el enrutado',
                 backgroundColor: Colors.white,
                 foregroundColor: AppColors.textPrimary,
-                onPressed: _fitAllRouteBounds,
+                onPressed: widget.onToggleFullScreen ?? _fitAllRouteBounds,
               ),
               const SizedBox(height: 8),
               _buildMapControlFab(

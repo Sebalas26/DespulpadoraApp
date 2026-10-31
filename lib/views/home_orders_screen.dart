@@ -83,14 +83,15 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
   void _refreshData() {
     final courier = context.read<AuthCubit>().currentCourier;
     if (courier != null) {
-      context.read<OrdersCubit>().loadOrders(
-            courierId: courier.id,
-            token: courier.token,
-          );
-      final activeOrderId = context.read<OrdersCubit>().state.activeOrderId;
+      final ordersCubit = context.read<OrdersCubit>();
+      ordersCubit.loadOrders(
+        courierId: courier.id,
+        token: courier.token,
+      );
       context.read<TrackingCubit>().syncWithShiftStatus(
             courier: courier,
-            activeOrderId: activeOrderId,
+            activeOrderId: ordersCubit.state.activeOrderId,
+            isRouteInProgress: ordersCubit.state.isDeliveringInRoute,
           );
     }
   }
@@ -264,7 +265,7 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
         actions: [
           BlocBuilder<TrackingCubit, TrackingState>(
             builder: (context, trackState) {
-              final isConnected =
+              final isConnected = trackState.isTrackingActive &&
                   trackState.wsStatus == WsConnectionStatus.connected;
               return Container(
                 margin: const EdgeInsets.only(right: 6),
@@ -352,9 +353,12 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
         backgroundColor: AppColors.surface,
         child: BlocConsumer<OrdersCubit, OrdersState>(
           listener: (context, state) {
-            context
-                .read<TrackingCubit>()
-                .updateActiveOrder(state.activeOrderId);
+            final courier = context.read<AuthCubit>().currentCourier;
+            context.read<TrackingCubit>().syncWithShiftStatus(
+                  courier: courier,
+                  activeOrderId: state.activeOrderId,
+                  isRouteInProgress: state.isDeliveringInRoute,
+                );
           },
           builder: (context, ordersState) {
             final hasRoute = ordersState.hasAssignedRoute;

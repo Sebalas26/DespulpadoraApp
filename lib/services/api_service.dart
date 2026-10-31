@@ -427,4 +427,36 @@ class ApiService {
       return false;
     }
   }
+
+  /// Obtiene los métodos de pago activos configurados en el sistema desde `/api/payment-methods`.
+  Future<List<Map<String, dynamic>>> fetchActivePaymentMethods({
+    String? token,
+  }) async {
+    final baseRoot = ApiConfig.baseUrl.replaceAll(RegExp(r'/api/mobile/?$'), '');
+    final url = Uri.parse('$baseRoot/api/payment-methods');
+    try {
+      final response = await _client
+          .get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+
+      if (response.statusCode == 200 && response.body.isNotEmpty) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is List) {
+          return decoded
+              .whereType<Map<String, dynamic>>()
+              .where((m) => (m['isActive'] ?? true) == true)
+              .toList();
+        }
+      }
+      return [];
+    } catch (_) {
+      return [];
+    }
+  }
 }

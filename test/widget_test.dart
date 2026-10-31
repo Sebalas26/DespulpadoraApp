@@ -452,9 +452,11 @@ void main() {
 
         final blockedAttempt = await cubit.startRoute('ORD-0102');
         expect(blockedAttempt, isFalse);
+        expect(cubit.state.isDeliveringInRoute, isFalse);
 
         final startedOrder = await cubit.startFullCourierRoute();
         expect(startedOrder?.id, equals('ORD-0101'));
+        expect(cubit.state.isDeliveringInRoute, isTrue);
         expect(
           requestedPaths.any((p) => p.endsWith('/orders/101/status')),
           isTrue,
@@ -462,6 +464,7 @@ void main() {
 
         final arrivedOk = await cubit.arrivedAtPoint('ORD-0101');
         expect(arrivedOk, isTrue);
+        expect(cubit.state.isDeliveringInRoute, isTrue);
 
         final deliveredOk = await cubit.confirmDelivery(
           'ORD-0101',
@@ -469,6 +472,7 @@ void main() {
           paymentMethod: 'Efectivo',
         );
         expect(deliveredOk, isTrue);
+        expect(cubit.state.isDeliveringInRoute, isTrue);
         expect(
           requestedPaths.any((p) => p.endsWith('/orders/101/confirm-delivery')),
           isTrue,
@@ -492,6 +496,8 @@ void main() {
           isTrue,
         );
         expect(cubit.state.pendingCount, equals(0));
+        expect(cubit.state.isRouteActive, isFalse);
+        expect(cubit.state.isDeliveringInRoute, isFalse);
         await cubit.close();
       },
     );
