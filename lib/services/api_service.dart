@@ -459,4 +459,37 @@ class ApiService {
       return [];
     }
   }
+
+  /// Envía un mensaje automático de WhatsApp a través del Gateway auto-alojado vinculado por QR.
+  Future<bool> sendWhatsAppNotification({
+    required String phone,
+    required String message,
+  }) async {
+    final trimmedPhone = phone.trim();
+    final trimmedMessage = message.trim();
+    if (trimmedPhone.isEmpty || trimmedMessage.isEmpty) {
+      return false;
+    }
+
+    for (final baseGatewayUrl in ApiConfig.whatsappGatewayFallbackUrls) {
+      try {
+        final url = Uri.parse('$baseGatewayUrl/send');
+        final response = await _client
+            .post(
+              url,
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'phone': trimmedPhone,
+                'message': trimmedMessage,
+              }),
+            )
+            .timeout(const Duration(seconds: 4));
+
+        if (response.statusCode == 200) {
+          return true;
+        }
+      } catch (_) {}
+    }
+    return false;
+  }
 }

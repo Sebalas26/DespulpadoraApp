@@ -249,16 +249,13 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               ),
               const SizedBox(height: 16),
               ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: AppColors.waze.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.navigation,
-                    color: AppColors.waze,
-                    size: 22,
+                leading: ClipRRect(
+                  borderRadius: BorderRadius.circular(10),
+                  child: Image.asset(
+                    'assets/images/waze-icon.png',
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.contain,
                   ),
                 ),
                 title: const Text(
@@ -300,15 +297,18 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               const Divider(),
               ListTile(
                 leading: Container(
-                  padding: const EdgeInsets.all(8),
+                  width: 40,
+                  height: 40,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
-                    color: AppColors.info.withValues(alpha: 0.15),
+                    color: AppColors.info.withValues(alpha: 0.08),
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(
-                    Icons.map_rounded,
-                    color: AppColors.info,
-                    size: 22,
+                  child: Image.asset(
+                    'assets/images/google-maps-icon.png',
+                    width: 32,
+                    height: 32,
+                    fit: BoxFit.contain,
                   ),
                 ),
                 title: const Text(

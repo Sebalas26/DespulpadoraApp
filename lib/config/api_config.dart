@@ -46,6 +46,17 @@ class ApiConfig {
   static const String defaultWsUrl =
       'wss://apidevdespulpadora.parking-flow.com/ws';
 
+  /// URL por defecto del Gateway auto-alojado de WhatsApp QR en red local.
+  static const String defaultWhatsappGatewayUrl =
+      'http://192.168.0.4:3005/api/whatsapp';
+
+  /// Lista de endpoints de respaldo para alcanzar el Gateway de WhatsApp desde simulador iOS, emulador Android o LAN.
+  static const List<String> whatsappGatewayFallbackUrls = <String>[
+    'http://192.168.0.4:3005/api/whatsapp',
+    'http://localhost:3005/api/whatsapp',
+    'http://10.0.2.2:3005/api/whatsapp',
+  ];
+
   /// Latitud de la planta matriz de despacho.
   static const double plantaMatrizLat = 4.7125;
 

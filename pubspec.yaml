@@ -81,6 +81,8 @@ flutter:
     - pubspec.yaml
     - assets/images/logo-dgl.png
     - assets/images/auth-hero-bg.jpg
+    - assets/images/waze-icon.png
+    - assets/images/google-maps-icon.png
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

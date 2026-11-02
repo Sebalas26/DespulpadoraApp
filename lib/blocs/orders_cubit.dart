@@ -682,10 +682,55 @@ class OrdersCubit extends Cubit<OrdersState> {
         activeOrderId: activeId,
         isRouteActive: routeActive,
       ));
+
+      if (targetOrder != null) {
+        _dispatchAutomaticWhatsAppForStatus(
+          targetOrder,
+          newStatus,
+          paymentMethod: paymentMethod ?? targetOrder.metodoPago,
+        );
+      }
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  /// Dispara en segundo plano el mensaje automático de WhatsApp según la transición de la parada.
+  void _dispatchAutomaticWhatsAppForStatus(
+    OrderModel order,
+    OrderStatus newStatus, {
+    String? paymentMethod,
+  }) {
+    try {
+      final phone = order.clienteTelefono.trim();
+      if (phone.isEmpty) {
+        return;
+      }
+
+      String? textMessage;
+      if (newStatus == OrderStatus.enCamino) {
+        textMessage =
+            '🛵 ¡Hola ${order.clienteNombre}! Tu pedido ${order.id} de DGL Despulpadora ya salió en ruta hacia ${order.direccion}. Valor a recaudar: ${order.montoFormatted}.';
+      } else if (newStatus == OrderStatus.enPunto) {
+        textMessage =
+            '📍 ¡Hola ${order.clienteNombre}! Nuestro domiciliario ya llegó al punto en ${order.direccion} con tu pedido ${order.id}.';
+      } else if (newStatus == OrderStatus.entregado) {
+        final appliedMethod =
+            (paymentMethod != null && paymentMethod.trim().isNotEmpty)
+                ? paymentMethod.trim()
+                : order.metodoPago;
+        textMessage =
+            '✅ ¡Hola ${order.clienteNombre}! Confirmamos la entrega exitosa de tu pedido ${order.id} por ${order.montoFormatted} ($appliedMethod). ¡Gracias por tu compra!';
+      }
+
+      if (textMessage != null && textMessage.isNotEmpty) {
+        _apiService.sendWhatsAppNotification(
+          phone: phone,
+          message: textMessage,
+        );
+      }
+    } catch (_) {}
   }
 
   /// Libera las suscripciones y temporizadores de sincronización en vivo al cerrar el Cubit.

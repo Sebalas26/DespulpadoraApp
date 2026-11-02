@@ -300,6 +300,17 @@ void main() {
           isTrue,
         );
         expect(
+          await apiOk.sendWhatsAppNotification(
+            phone: '3101234567',
+            message: 'Pedido en camino',
+          ),
+          isTrue,
+        );
+        expect(
+          await apiOk.sendWhatsAppNotification(phone: '', message: ''),
+          isFalse,
+        );
+        expect(
           await apiOk.updateLocation(
             courierId: 12,
             latitude: 4.65,
@@ -726,6 +737,48 @@ void main() {
         );
 
         await authCubit.close();
+      },
+    );
+
+    testWidgets(
+      'Opciones de navegación externa cargan y renderizan los íconos oficiales de Waze y Google Maps',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Column(
+                children: [
+                  ListTile(
+                    leading: Image.asset(
+                      'assets/images/waze-icon.png',
+                      width: 40,
+                      height: 40,
+                    ),
+                    title: const Text('Waze'),
+                  ),
+                  ListTile(
+                    leading: Image.asset(
+                      'assets/images/google-maps-icon.png',
+                      width: 32,
+                      height: 32,
+                    ),
+                    title: const Text('Google Maps'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(
+          find.image(const AssetImage('assets/images/waze-icon.png')),
+          findsOneWidget,
+        );
+        expect(
+          find.image(const AssetImage('assets/images/google-maps-icon.png')),
+          findsOneWidget,
+        );
       },
     );
   });
