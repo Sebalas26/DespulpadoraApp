@@ -36,6 +36,12 @@ class ApiService {
   /// Cliente HTTP inyectable para facilitar pruebas unitarias y peticiones reales.
   final http.Client _client;
 
+  /// Último nombre del domiciliario autenticado para cruce de respaldo en rutas asignadas.
+  String _lastAuthenticatedCourierName = '';
+
+  /// Último userId del domiciliario autenticado para cruce de respaldo cuando difiere de courierId.
+  String _lastAuthenticatedUserId = '';
+
   /// Crea una instancia de [ApiService] permitiendo inyectar un [http.Client] personalizado.
   ApiService({http.Client? client}) : _client = client ?? http.Client();
 
@@ -126,14 +132,19 @@ class ApiService {
                 ?.toString();
 
         final rawId = userData['courierId'] ?? userData['id'];
+        final resolvedName = (userData['fullName'] ??
+                userData['nombre'] ??
+                userData['courierName'] ??
+                userData['username'] ??
+                '')
+            .toString();
+        _lastAuthenticatedCourierName = resolvedName.trim();
+        _lastAuthenticatedUserId =
+            (userData['userId'] ?? userData['id'] ?? '').toString().trim();
+
         return CourierModel(
           id: rawId != null ? rawId.toString() : '',
-          nombre: (userData['fullName'] ??
-                  userData['nombre'] ??
-                  userData['courierName'] ??
-                  userData['username'] ??
-                  '')
-              .toString(),
+          nombre: resolvedName,
           placaVehiculo:
               (userData['vehiclePlate'] ?? userData['placaVehiculo'] ?? '')
                   .toString(),
@@ -188,12 +199,15 @@ class ApiService {
           final orders = decoded
               .map((json) => OrderModel.fromJson(json as Map<String, dynamic>))
               .toList();
-          final anyStarted = orders.any((o) => o.estado != OrderStatus.asignado);
-          return AssignedRouteResponse(
-            orders: orders,
-            hasAssignedRoute: orders.isNotEmpty,
-            isRouteReceived: anyStarted,
-          );
+          if (orders.isNotEmpty) {
+            final anyStarted =
+                orders.any((o) => o.estado != OrderStatus.asignado);
+            return AssignedRouteResponse(
+              orders: orders,
+              hasAssignedRoute: orders.isNotEmpty,
+              isRouteReceived: anyStarted,
+            );
+          }
         } else if (decoded is Map<String, dynamic>) {
           final List<dynamic> list =
               (decoded['orders'] ?? decoded['data'] ?? []) as List<dynamic>;
@@ -212,16 +226,104 @@ class ApiService {
               (decoded['assignedRouteZone'] ?? decoded['routeZone'] ?? '')
                   .toString();
 
-          return AssignedRouteResponse(
-            orders: orders,
-            hasAssignedRoute: hasRoute,
-            isRouteReceived: isReceived,
-            assignedRouteCode: routeCode,
-            assignedRouteZone: routeZone,
-          );
+          if (orders.isNotEmpty || hasRoute) {
+            return AssignedRouteResponse(
+              orders: orders,
+              hasAssignedRoute: hasRoute,
+              isRouteReceived: isReceived,
+              assignedRouteCode: routeCode,
+              assignedRouteZone: routeZone,
+            );
+          }
         }
       }
-      return const AssignedRouteResponse(orders: []);
+      return await _fetchFallbackAssignedOrdersFromOrdersEndpoint(
+        courierId: courierId,
+        token: token,
+      );
+    } catch (_) {
+      return await _fetchFallbackAssignedOrdersFromOrdersEndpoint(
+        courierId: courierId,
+        token: token,
+      );
+    }
+  }
+
+  /// Consulta `/api/orders` como respaldo cuando el pedido fue despachado con `userId` o `courierName`.
+  Future<AssignedRouteResponse> _fetchFallbackAssignedOrdersFromOrdersEndpoint({
+    required String courierId,
+    String? token,
+  }) async {
+    try {
+      final url = Uri.parse('${ApiConfig.baseUrl}/orders');
+      final response = await _client
+          .get(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              if (token != null) 'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 6));
+
+      if (response.statusCode != 200 || response.body.isEmpty) {
+        return const AssignedRouteResponse(orders: []);
+      }
+
+      final dynamic decoded = jsonDecode(response.body);
+      final List<dynamic> rawList = decoded is List
+          ? decoded
+          : (decoded is Map<String, dynamic>
+              ? ((decoded['data'] ?? decoded['orders'] ?? []) as List<dynamic>)
+              : <dynamic>[]);
+
+      final String targetId = courierId.trim();
+      final String targetUserId = _lastAuthenticatedUserId.trim();
+      final String targetName = _lastAuthenticatedCourierName.trim().toLowerCase();
+
+      final List<OrderModel> matchedOrders = <OrderModel>[];
+      String detectedRouteCode = '';
+
+      for (final dynamic item in rawList) {
+        if (item is! Map<String, dynamic>) continue;
+        final String statusRaw =
+            (item['status'] ?? item['estado'] ?? '').toString().toUpperCase();
+        if (statusRaw == 'CANCELLED' ||
+            statusRaw == 'CANCELADO' ||
+            statusRaw == 'PENDING' ||
+            statusRaw == 'PENDIENTE' ||
+            statusRaw == 'PICKING') {
+          continue;
+        }
+
+        final String itemCourierId =
+            (item['courierId'] ?? '').toString().trim();
+        final String itemCourierName =
+            (item['courierName'] ?? '').toString().trim().toLowerCase();
+
+        final bool matchesById =
+            targetId.isNotEmpty && itemCourierId == targetId;
+        final bool matchesByUserId =
+            targetUserId.isNotEmpty && itemCourierId == targetUserId;
+        final bool matchesByName =
+            targetName.isNotEmpty && itemCourierName == targetName;
+
+        if (matchesById || matchesByUserId || matchesByName) {
+          matchedOrders.add(OrderModel.fromJson(item));
+          if (detectedRouteCode.isEmpty && item['routeCode'] != null) {
+            detectedRouteCode = item['routeCode'].toString();
+          }
+        }
+      }
+
+      final bool anyStarted =
+          matchedOrders.any((o) => o.estado != OrderStatus.asignado);
+      return AssignedRouteResponse(
+        orders: matchedOrders,
+        hasAssignedRoute: matchedOrders.isNotEmpty,
+        isRouteReceived: anyStarted,
+        assignedRouteCode: detectedRouteCode,
+      );
     } catch (_) {
       return const AssignedRouteResponse(orders: []);
     }
