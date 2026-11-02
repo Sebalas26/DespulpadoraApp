@@ -422,6 +422,9 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   backgroundColor: AppColors.primary,
                 ),
               );
+              if (nextTurn == null && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
             }
           } catch (_) {
             if (mounted) {
@@ -463,6 +466,9 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                   ),
                 ),
               );
+              if (nextTurn == null && Navigator.of(context).canPop()) {
+                Navigator.of(context).pop();
+              }
             }
           } catch (_) {
             if (mounted) {
@@ -943,15 +949,18 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(
-                child: _buildQuickActionChip(
-                  icon: Icons.phone_rounded,
-                  label: 'Llamar',
-                  color: AppColors.primary,
-                  onTap: () => _makePhoneCall(order.clienteTelefono),
+              if (order.estado != OrderStatus.entregado &&
+                  order.clienteTelefono.isNotEmpty) ...[
+                Expanded(
+                  child: _buildQuickActionChip(
+                    icon: Icons.phone_rounded,
+                    label: 'Llamar',
+                    color: AppColors.primary,
+                    onTap: () => _makePhoneCall(order.clienteTelefono),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 6),
+                const SizedBox(width: 6),
+              ],
               Expanded(
                 child: _buildQuickActionChip(
                   icon: Icons.chat_rounded,

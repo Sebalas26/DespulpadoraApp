@@ -15,6 +15,7 @@ import 'package:despulpadora_app/main.dart';
 import 'package:despulpadora_app/services/api_service.dart';
 import 'package:despulpadora_app/services/location_service.dart';
 import 'package:despulpadora_app/views/login_screen.dart';
+import 'package:despulpadora_app/views/widgets/order_card_widget.dart';
 
 /// Suite integral de pruebas unitarias para modelos, servicios REST (`/api/mobile`) y Cubits.
 void main() {
@@ -779,6 +780,169 @@ void main() {
           find.image(const AssetImage('assets/images/google-maps-icon.png')),
           findsOneWidget,
         );
+      },
+    );
+
+    test(
+      'OrdersCubit y ApiService descartan paradas entregadas de una ruta anterior al asignar una nueva ruta',
+      () async {
+        int callPhase = 1;
+        final mockClient = MockClient((request) async {
+          if (request.url.path.endsWith('/orders/assigned')) {
+            if (callPhase == 1) {
+              return http.Response(
+                jsonEncode({
+                  'hasAssignedRoute': true,
+                  'isRouteReceived': true,
+                  'assignedRouteCode': 'RUT-OLD',
+                  'assignedRouteZone': 'Zona Norte',
+                  'orders': [
+                    {
+                      'id': 201,
+                      'orderCode': 'PED-201',
+                      'clientName': 'Entrega Anterior 1',
+                      'clientAddress': 'Calle 100 # 15-20',
+                      'total': 35000,
+                      'status': 'Entregado',
+                      'routeSequenceOrder': 1,
+                      'dispatchedAtUtc': '2026-11-02T14:00:00Z',
+                      'deliveredAtUtc': '2026-11-02T14:20:00Z',
+                      'items': [],
+                    },
+                    {
+                      'id': 202,
+                      'orderCode': 'PED-202',
+                      'clientName': 'Entrega Anterior 2',
+                      'clientAddress': 'Calle 105 # 18-30',
+                      'total': 45000,
+                      'status': 'Entregado',
+                      'routeSequenceOrder': 2,
+                      'dispatchedAtUtc': '2026-11-02T14:00:00Z',
+                      'deliveredAtUtc': '2026-11-02T14:35:00Z',
+                      'items': [],
+                    },
+                  ],
+                }),
+                200,
+              );
+            }
+            return http.Response(
+              jsonEncode({
+                'hasAssignedRoute': true,
+                'isRouteReceived': true,
+                'assignedRouteCode': 'RUT-NEW',
+                'assignedRouteZone': 'Zona Sur',
+                'orders': [
+                  {
+                    'id': 201,
+                    'orderCode': 'PED-201',
+                    'clientName': 'Entrega Anterior 1',
+                    'clientAddress': 'Calle 100 # 15-20',
+                    'total': 35000,
+                    'status': 'Entregado',
+                    'routeSequenceOrder': 1,
+                    'dispatchedAtUtc': '2026-11-02T14:00:00Z',
+                    'deliveredAtUtc': '2026-11-02T14:20:00Z',
+                    'items': [],
+                  },
+                  {
+                    'id': 202,
+                    'orderCode': 'PED-202',
+                    'clientName': 'Entrega Anterior 2',
+                    'clientAddress': 'Calle 105 # 18-30',
+                    'total': 45000,
+                    'status': 'Entregado',
+                    'routeSequenceOrder': 2,
+                    'dispatchedAtUtc': '2026-11-02T14:00:00Z',
+                    'deliveredAtUtc': '2026-11-02T14:35:00Z',
+                    'items': [],
+                  },
+                  {
+                    'id': 301,
+                    'orderCode': 'PED-301',
+                    'clientName': 'Nueva Entrega Unica',
+                    'clientAddress': 'Carrera 50 # 10-15',
+                    'total': 60000,
+                    'status': 'Asignado',
+                    'routeSequenceOrder': 1,
+                    'dispatchedAtUtc': '2026-11-02T16:00:00Z',
+                    'items': [],
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          return http.Response('{}', 200);
+        });
+
+        final cubit = OrdersCubit(apiService: ApiService(client: mockClient));
+        await cubit.loadOrders(courierId: '7', token: 'jwt');
+        expect(cubit.state.hasAssignedRoute, isFalse);
+        expect(cubit.state.totalCount, equals(0));
+        expect(cubit.state.deliveredCount, equals(0));
+        expect(cubit.state.pendingCount, equals(0));
+
+        cubit.setFilter(OrdersFilter.entregados);
+        callPhase = 2;
+        await cubit.refreshOrdersLive(courierId: '7');
+
+        expect(cubit.state.hasAssignedRoute, isTrue);
+        expect(cubit.state.totalCount, equals(1));
+        expect(cubit.state.deliveredCount, equals(0));
+        expect(cubit.state.pendingCount, equals(1));
+        expect(cubit.state.orders.first.id, equals('PED-301'));
+        expect(cubit.state.isRouteReceived, isFalse);
+        expect(cubit.state.filter, equals(OrdersFilter.todos));
+
+        await cubit.close();
+      },
+    );
+
+    testWidgets(
+      'OrderCardWidget muestra el botón de teléfono en pedidos pendientes y lo oculta cuando ya está entregado',
+      (WidgetTester tester) async {
+        final pendingOrder = OrderModel.fromJson({
+          'id': 501,
+          'orderCode': 'ORD-0501',
+          'clientName': 'Cliente Pendiente',
+          'clientPhone': '3101234567',
+          'clientAddress': 'Calle 50 # 10-20',
+          'total': 25000,
+          'status': 'Asignado',
+          'items': [],
+        });
+
+        final deliveredOrder = OrderModel.fromJson({
+          'id': 502,
+          'orderCode': 'ORD-0502',
+          'clientName': 'Cliente Entregado',
+          'clientPhone': '3101234567',
+          'clientAddress': 'Calle 60 # 15-30',
+          'total': 30000,
+          'status': 'Entregado',
+          'items': [],
+        });
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: OrderCardWidget(order: pendingOrder, stopNumber: 1),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byIcon(Icons.phone_rounded), findsOneWidget);
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: OrderCardWidget(order: deliveredOrder, stopNumber: 1),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byIcon(Icons.phone_rounded), findsNothing);
       },
     );
   });

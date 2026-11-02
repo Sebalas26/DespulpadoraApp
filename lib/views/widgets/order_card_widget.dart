@@ -145,7 +145,7 @@ class OrderCardWidget extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (order.clienteTelefono.isNotEmpty)
+                if (order.clienteTelefono.isNotEmpty && !isDelivered)
                   IconButton(
                     visualDensity: VisualDensity.compact,
                     icon: const Icon(

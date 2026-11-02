@@ -174,6 +174,102 @@ class ApiService {
     }
   }
 
+  /// Filtra la lista cruda de pedidos para descartar entregas de rutas anteriores o rutas sin paradas activas pendientes.
+  List<Map<String, dynamic>> _filterActiveRouteOrderMaps(
+    List<dynamic> rawList,
+  ) {
+    final List<Map<String, dynamic>> allMaps = rawList
+        .whereType<Map<String, dynamic>>()
+        .toList();
+    if (allMaps.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+
+    bool isTerminal(Map<String, dynamic> map) {
+      final String status =
+          (map['status'] ?? map['estado'] ?? '').toString().trim().toLowerCase();
+      return status == 'entregado' ||
+          status == 'delivered' ||
+          status == 'novedad' ||
+          status == 'cancelado' ||
+          status == 'cancelled';
+    }
+
+    final List<Map<String, dynamic>> activeMaps =
+        allMaps.where((m) => !isTerminal(m)).toList();
+    if (activeMaps.isEmpty) {
+      return const <Map<String, dynamic>>[];
+    }
+    if (allMaps.length <= 1) {
+      return allMaps;
+    }
+
+    final Set<int> activeSeqs = <int>{};
+    int? minActiveSeq;
+    DateTime? latestActiveDispatchUtc;
+
+    for (final Map<String, dynamic> active in activeMaps) {
+      final int? seq = int.tryParse(
+        (active['routeSequenceOrder'] ?? '').toString(),
+      );
+      if (seq != null && seq > 0) {
+        activeSeqs.add(seq);
+        if (minActiveSeq == null || seq < minActiveSeq) {
+          minActiveSeq = seq;
+        }
+      }
+      final DateTime? disp = DateTime.tryParse(
+        (active['dispatchedAtUtc'] ?? '').toString(),
+      )?.toUtc();
+      if (disp != null &&
+          (latestActiveDispatchUtc == null ||
+              disp.isAfter(latestActiveDispatchUtc))) {
+        latestActiveDispatchUtc = disp;
+      }
+    }
+
+    return allMaps.where((Map<String, dynamic> item) {
+      if (!isTerminal(item)) {
+        return true;
+      }
+
+      if (minActiveSeq != null && minActiveSeq <= 1) {
+        return false;
+      }
+
+      final int? itemSeq = int.tryParse(
+        (item['routeSequenceOrder'] ?? '').toString(),
+      );
+      if (activeSeqs.isNotEmpty) {
+        if (itemSeq == null || itemSeq <= 0 || activeSeqs.contains(itemSeq)) {
+          return false;
+        }
+        if (minActiveSeq != null && itemSeq >= minActiveSeq) {
+          return false;
+        }
+      }
+
+      if (latestActiveDispatchUtc != null) {
+        final DateTime? deliveredUtc = DateTime.tryParse(
+          (item['deliveredAtUtc'] ?? '').toString(),
+        )?.toUtc();
+        if (deliveredUtc != null &&
+            !deliveredUtc.isAfter(latestActiveDispatchUtc)) {
+          return false;
+        }
+        final DateTime? itemDispatchUtc = DateTime.tryParse(
+          (item['dispatchedAtUtc'] ?? '').toString(),
+        )?.toUtc();
+        if (itemDispatchUtc != null &&
+            latestActiveDispatchUtc.difference(itemDispatchUtc).inSeconds > 15) {
+          return false;
+        }
+      }
+
+      return true;
+    }).toList();
+  }
+
   /// Consulta la ruta activa y la lista de pedidos asignados al domiciliario en `/api/mobile/orders/assigned`.
   Future<AssignedRouteResponse> fetchAssignedRoute({
     required String courierId,
@@ -196,9 +292,8 @@ class ApiService {
       if (response.statusCode == 200 && response.body.isNotEmpty) {
         final dynamic decoded = jsonDecode(response.body);
         if (decoded is List) {
-          final orders = decoded
-              .map((json) => OrderModel.fromJson(json as Map<String, dynamic>))
-              .toList();
+          final filteredMaps = _filterActiveRouteOrderMaps(decoded);
+          final orders = filteredMaps.map(OrderModel.fromJson).toList();
           if (orders.isNotEmpty) {
             final anyStarted =
                 orders.any((o) => o.estado != OrderStatus.asignado);
@@ -208,28 +303,44 @@ class ApiService {
               isRouteReceived: anyStarted,
             );
           }
+          if (decoded.isNotEmpty) {
+            return const AssignedRouteResponse(
+              orders: [],
+              hasAssignedRoute: false,
+              isRouteReceived: false,
+            );
+          }
         } else if (decoded is Map<String, dynamic>) {
           final List<dynamic> list =
               (decoded['orders'] ?? decoded['data'] ?? []) as List<dynamic>;
-          final orders = list
-              .map((json) => OrderModel.fromJson(json as Map<String, dynamic>))
-              .toList();
-          final anyStarted = orders.any((o) => o.estado != OrderStatus.asignado);
-          final bool hasRoute =
-              (decoded['hasAssignedRoute'] as bool?) ?? orders.isNotEmpty;
-          final bool isReceived =
-              (decoded['isRouteReceived'] as bool?) ?? anyStarted;
-          final String routeCode =
-              (decoded['assignedRouteCode'] ?? decoded['routeCode'] ?? '')
-                  .toString();
-          final String routeZone =
-              (decoded['assignedRouteZone'] ?? decoded['routeZone'] ?? '')
-                  .toString();
+          final filteredMaps = _filterActiveRouteOrderMaps(list);
+          final bool purgedStaleCompletedOrders =
+              filteredMaps.length < list.length;
+          final orders = filteredMaps.map(OrderModel.fromJson).toList();
+          if (orders.isEmpty) {
+            if (list.isNotEmpty || decoded['hasAssignedRoute'] == false) {
+              return const AssignedRouteResponse(
+                orders: [],
+                hasAssignedRoute: false,
+                isRouteReceived: false,
+              );
+            }
+          } else {
+            final anyStarted =
+                orders.any((o) => o.estado != OrderStatus.asignado);
+            final bool isReceived = purgedStaleCompletedOrders
+                ? anyStarted
+                : ((decoded['isRouteReceived'] as bool?) ?? anyStarted);
+            final String routeCode =
+                (decoded['assignedRouteCode'] ?? decoded['routeCode'] ?? '')
+                    .toString();
+            final String routeZone =
+                (decoded['assignedRouteZone'] ?? decoded['routeZone'] ?? '')
+                    .toString();
 
-          if (orders.isNotEmpty || hasRoute) {
             return AssignedRouteResponse(
               orders: orders,
-              hasAssignedRoute: hasRoute,
+              hasAssignedRoute: true,
               isRouteReceived: isReceived,
               assignedRouteCode: routeCode,
               assignedRouteZone: routeZone,
@@ -281,7 +392,7 @@ class ApiService {
       final String targetUserId = _lastAuthenticatedUserId.trim();
       final String targetName = _lastAuthenticatedCourierName.trim().toLowerCase();
 
-      final List<OrderModel> matchedOrders = <OrderModel>[];
+      final List<Map<String, dynamic>> matchedMaps = <Map<String, dynamic>>[];
       String detectedRouteCode = '';
 
       for (final dynamic item in rawList) {
@@ -309,12 +420,17 @@ class ApiService {
             targetName.isNotEmpty && itemCourierName == targetName;
 
         if (matchesById || matchesByUserId || matchesByName) {
-          matchedOrders.add(OrderModel.fromJson(item));
+          matchedMaps.add(item);
           if (detectedRouteCode.isEmpty && item['routeCode'] != null) {
             detectedRouteCode = item['routeCode'].toString();
           }
         }
       }
+
+      final List<Map<String, dynamic>> activeRouteMaps =
+          _filterActiveRouteOrderMaps(matchedMaps);
+      final List<OrderModel> matchedOrders =
+          activeRouteMaps.map(OrderModel.fromJson).toList();
 
       final bool anyStarted =
           matchedOrders.any((o) => o.estado != OrderStatus.asignado);
