@@ -80,6 +80,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
             courier: courier,
             activeOrderId: ordersState.activeOrderId,
             isRouteInProgress: ordersState.isDeliveringInRoute,
+            forceImmediate: true,
           );
     } catch (_) {
       return;
@@ -99,7 +100,10 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
   /// Garantiza que la coordenada del domiciliario sea válida dentro del área operativa.
   LatLng _resolveCourierLocation(LatLng? rawLoc) {
     if (rawLoc != null &&
-        LocationService.isWithinColombia(rawLoc.latitude, rawLoc.longitude)) {
+        LocationService.isValidRealGpsCoordinate(
+          rawLoc.latitude,
+          rawLoc.longitude,
+        )) {
       return rawLoc;
     }
     return LocationService.defaultLocation;

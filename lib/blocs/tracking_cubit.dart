@@ -103,6 +103,12 @@ class TrackingCubit extends Cubit<TrackingState> {
   /// Indica si hay una petición REST de ubicación en curso para evitar encolamiento.
   bool _isRestUpdateInFlight = false;
 
+  /// Indica si hay una lectura puntual de GPS en curso para evitar colisiones por segundo.
+  bool _isReadingGps = false;
+
+  /// Última lectura GPS real verificada del dispositivo.
+  Position? _lastRealPosition;
+
   /// Crea una instancia de [TrackingCubit] permitiendo inyectar sus servicios dependientes.
   TrackingCubit({
     LocationService? locationService,
@@ -122,13 +128,14 @@ class TrackingCubit extends Cubit<TrackingState> {
     required CourierModel? courier,
     required String? activeOrderId,
     bool isRouteInProgress = false,
+    bool forceImmediate = false,
   }) {
     try {
       _currentCourier = courier;
       _activeOrderId = activeOrderId;
 
       if (courier != null && courier.isOnline && isRouteInProgress) {
-        startTracking();
+        startTracking(forceImmediateSync: forceImmediate);
       } else {
         stopTracking();
       }
@@ -142,39 +149,76 @@ class TrackingCubit extends Cubit<TrackingState> {
     _activeOrderId = orderId;
   }
 
+  /// Fuerza la lectura inmediata de la posición GPS real del dispositivo y su transmisión al backend y WebSocket.
+  Future<void> forceImmediateLocationSync({
+    CourierModel? courier,
+    String? activeOrderId,
+  }) async {
+    try {
+      if (courier != null) {
+        _currentCourier = courier;
+      }
+      if (activeOrderId != null) {
+        _activeOrderId = activeOrderId;
+      }
+
+      Position? pos = _locationService.lastValidPosition ?? _lastRealPosition;
+      if (!_isReadingGps) {
+        _isReadingGps = true;
+        try {
+          final Position? freshPos = await _locationService.getCurrentPosition();
+          if (freshPos != null) {
+            pos = freshPos;
+          }
+        } finally {
+          _isReadingGps = false;
+        }
+      }
+
+      if (pos != null &&
+          LocationService.isValidRealGpsCoordinate(
+            pos.latitude,
+            pos.longitude,
+          )) {
+        _lastRealPosition = pos;
+        await _sendTelemetryPacket(pos);
+      }
+    } catch (_) {
+      _isReadingGps = false;
+    }
+  }
+
   /// Inicia la captura continua de coordenadas GPS en tiempo real y establece la conexión WebSocket.
-  Future<void> startTracking() async {
-    if (state.isTrackingActive) return;
+  Future<void> startTracking({bool forceImmediateSync = false}) async {
+    if (state.isTrackingActive) {
+      if (forceImmediateSync) {
+        await forceImmediateLocationSync();
+      }
+      return;
+    }
 
     emit(state.copyWith(isTrackingActive: true));
     try {
       _wsService.connect();
       _refreshBatteryCache();
 
+      await _locationService.checkAndRequestPermissions();
+
       _positionSubscription?.cancel();
       _positionSubscription = _locationService
           .getPositionStream(intervalSeconds: 0)
           .listen((Position pos) {
-        if (state.isTrackingActive) {
+        if (state.isTrackingActive &&
+            LocationService.isValidRealGpsCoordinate(
+              pos.latitude,
+              pos.longitude,
+            )) {
+          _lastRealPosition = pos;
           _sendTelemetryPacket(pos);
         }
       }, onError: (_) {});
 
-      final Position? initialPos = await _locationService.getCurrentPosition();
-      if (initialPos != null) {
-        final LatLng safeLoc = LocationService.isWithinColombia(
-          initialPos.latitude,
-          initialPos.longitude,
-        )
-            ? LatLng(initialPos.latitude, initialPos.longitude)
-            : LocationService.defaultLocation;
-        emit(state.copyWith(
-          currentLocation: safeLoc,
-          speed: initialPos.speed * 3.6,
-          heading: initialPos.heading,
-        ));
-        await _sendTelemetryPacket(initialPos);
-      }
+      await forceImmediateLocationSync();
 
       _telemetryTimer?.cancel();
       _telemetryTimer = Timer.periodic(
@@ -192,28 +236,62 @@ class TrackingCubit extends Cubit<TrackingState> {
     } catch (_) {}
   }
 
-  /// Ejecuta un ciclo periódico de lectura y transmisión GPS.
+  /// Ejecuta un ciclo periódico de lectura y transmisión GPS sin colisionar lecturas concurrentes.
   Future<void> _tickTelemetry() async {
     if (!state.isTrackingActive) return;
     try {
       _refreshBatteryCache();
-      final Position? position = await _locationService.getCurrentPosition();
-      if (position != null) {
+      if (_isReadingGps) {
+        final Position? cached =
+            _locationService.lastValidPosition ?? _lastRealPosition;
+        if (cached != null &&
+            LocationService.isValidRealGpsCoordinate(
+              cached.latitude,
+              cached.longitude,
+            )) {
+          await _sendTelemetryPacket(cached);
+        }
+        return;
+      }
+
+      _isReadingGps = true;
+      Position? position;
+      try {
+        position = await _locationService.getCurrentPosition();
+      } finally {
+        _isReadingGps = false;
+      }
+
+      position ??= _locationService.lastValidPosition ?? _lastRealPosition;
+      if (position != null &&
+          LocationService.isValidRealGpsCoordinate(
+            position.latitude,
+            position.longitude,
+          )) {
+        _lastRealPosition = position;
         await _sendTelemetryPacket(position);
       }
-    } catch (_) {}
+    } catch (_) {
+      _isReadingGps = false;
+    }
   }
 
-  /// Construye y transmite al instante el paquete de ubicación por WebSocket y mediante `PUT /couriers/{id}/location`.
+  /// Construye y transmite al instante el paquete de ubicación real por WebSocket y mediante `PUT /couriers/{id}/location`.
   Future<void> _sendTelemetryPacket(Position position) async {
     try {
-      final int battery = _cachedBatteryLevel;
-      final LatLng currentLatLng = LocationService.isWithinColombia(
+      if (!LocationService.isValidRealGpsCoordinate(
         position.latitude,
         position.longitude,
-      )
-          ? LatLng(position.latitude, position.longitude)
-          : LocationService.defaultLocation;
+      )) {
+        return;
+      }
+
+      _lastRealPosition = position;
+      final int battery = _cachedBatteryLevel;
+      final LatLng currentLatLng = LatLng(
+        position.latitude,
+        position.longitude,
+      );
 
       final String courierIdStr = _currentCourier?.id ?? '';
       final String courierNameStr = _currentCourier?.nombre ?? '';

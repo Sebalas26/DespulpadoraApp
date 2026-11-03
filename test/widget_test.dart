@@ -1008,6 +1008,22 @@ void main() {
         );
         expect(flutterMap.options.initialZoom, closeTo(17.65, 0.01));
         expect(ApiConfig.telemetryIntervalSeconds, equals(1));
+        expect(
+          LocationService.isLegacyHardcodedFallback(4.69680, -74.09250),
+          isTrue,
+        );
+        expect(
+          LocationService.isValidRealGpsCoordinate(4.69680, -74.09250),
+          isFalse,
+        );
+        expect(
+          LocationService.isValidRealGpsCoordinate(0.0, 0.0),
+          isFalse,
+        );
+        expect(
+          LocationService.isValidRealGpsCoordinate(4.6612, -74.1145),
+          isTrue,
+        );
       },
     );
   });

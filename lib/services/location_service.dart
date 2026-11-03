@@ -4,6 +4,7 @@ import 'package:battery_plus/battery_plus.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import '../config/api_config.dart';
 
 /// Servicio para obtener coordenadas GPS del dispositivo, calcular distancias y consultar el nivel de batería.
 class LocationService {
@@ -13,15 +14,39 @@ class LocationService {
   /// Suscripción opcional al flujo continuo de ubicación.
   StreamSubscription<Position>? _positionSubscription;
 
+  /// Última posición real del hardware GPS verificada en la sesión.
+  Position? _lastValidPosition;
+
   /// Caché en memoria de direcciones geocodificadas dentro de Colombia.
   static final Map<String, LatLng> _geocodedAddressCache = <String, LatLng>{};
 
-  /// Coordenada de referencia inicial cuando el dispositivo aún no reporta señal dentro del territorio nacional.
-  static const LatLng defaultLocation = LatLng(4.69680, -74.09250);
+  /// Coordenada de referencia visual de la planta cuando el dispositivo aún no reporta señal GPS.
+  static const LatLng defaultLocation = LatLng(
+    ApiConfig.plantaMatrizLat,
+    ApiConfig.plantaMatrizLng,
+  );
+
+  /// Identifica si una coordenada corresponde al antiguo punto quemado de prueba (4.69680, -74.09250).
+  static bool isLegacyHardcodedFallback(double lat, double lng) {
+    return (lat - 4.69680).abs() < 0.00025 && (lng - (-74.09250)).abs() < 0.00025;
+  }
+
+  /// Verifica si una coordenada proviene de una lectura GPS real y válida (no cero ni quemada).
+  static bool isValidRealGpsCoordinate(double lat, double lng) {
+    return lat.isFinite &&
+        lng.isFinite &&
+        lat.abs() > 0.0001 &&
+        lng.abs() > 0.0001 &&
+        !isLegacyHardcodedFallback(lat, lng);
+  }
 
   /// Verifica si una coordenada GPS se encuentra dentro de los límites geográficos de Colombia.
   static bool isWithinColombia(double lat, double lng) {
-    return lat >= -4.5 && lat <= 13.5 && lng >= -80.0 && lng <= -66.5;
+    return lat >= -4.5 &&
+        lat <= 13.5 &&
+        lng >= -80.0 &&
+        lng <= -66.5 &&
+        !isLegacyHardcodedFallback(lat, lng);
   }
 
   /// Garantiza que un par de coordenadas se encuentre dentro de Colombia o retorna [defaultLocation].
@@ -101,40 +126,8 @@ class LocationService {
     }
   }
 
-  /// Normaliza una posición GPS garantizando coordenadas válidas dentro del área operativa.
-  Position _normalizePositionForBogota(Position pos) {
-    if (isWithinColombia(pos.latitude, pos.longitude)) {
-      return pos;
-    }
-    return Position(
-      latitude: defaultLocation.latitude,
-      longitude: defaultLocation.longitude,
-      timestamp: DateTime.now(),
-      altitude: 2600.0,
-      altitudeAccuracy: 5.0,
-      accuracy: 5.0,
-      heading: pos.heading,
-      headingAccuracy: 5.0,
-      speed: pos.speed > 0 ? pos.speed : 0.0,
-      speedAccuracy: 1.0,
-    );
-  }
-
-  /// Construye un objeto [Position] con la ubicación de referencia inicial.
-  Position _buildDefaultBogotaPosition() {
-    return Position(
-      latitude: defaultLocation.latitude,
-      longitude: defaultLocation.longitude,
-      timestamp: DateTime.now(),
-      altitude: 2600.0,
-      altitudeAccuracy: 5.0,
-      accuracy: 5.0,
-      heading: 0.0,
-      headingAccuracy: 5.0,
-      speed: 0.0,
-      speedAccuracy: 1.0,
-    );
-  }
+  /// Retorna la última posición GPS real verificada en memoria, si existe.
+  Position? get lastValidPosition => _lastValidPosition;
 
   /// Verifica y solicita los permisos de localización del sistema operativo.
   Future<bool> checkAndRequestPermissions() async {
@@ -162,27 +155,39 @@ class LocationService {
     }
   }
 
-  /// Obtiene la posición GPS actual del dispositivo.
+  /// Obtiene la posición GPS real del dispositivo sin inventar coordenadas quemadas en caso de timeout.
   Future<Position?> getCurrentPosition() async {
     try {
       final hasPermission = await checkAndRequestPermissions();
       if (!hasPermission) {
-        return _buildDefaultBogotaPosition();
+        return _lastValidPosition;
       }
 
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
           accuracy: LocationAccuracy.bestForNavigation,
-          timeLimit: Duration(seconds: 4),
+          timeLimit: Duration(seconds: 8),
         ),
       );
-      return _normalizePositionForBogota(pos);
+      if (isValidRealGpsCoordinate(pos.latitude, pos.longitude)) {
+        _lastValidPosition = pos;
+        return pos;
+      }
+      return _lastValidPosition;
     } catch (_) {
-      return _buildDefaultBogotaPosition();
+      try {
+        final Position? lastKnown = await Geolocator.getLastKnownPosition();
+        if (lastKnown != null &&
+            isValidRealGpsCoordinate(lastKnown.latitude, lastKnown.longitude)) {
+          _lastValidPosition = lastKnown;
+          return lastKnown;
+        }
+      } catch (_) {}
+      return _lastValidPosition;
     }
   }
 
-  /// Retorna un flujo continuo de actualizaciones de posición GPS sin filtro de distancia ni segundos de demora.
+  /// Retorna un flujo continuo de actualizaciones de posición GPS reales sin filtro de distancia ni segundos de demora.
   Stream<Position> getPositionStream({int intervalSeconds = 0}) {
     const LocationSettings locationSettings = LocationSettings(
       accuracy: LocationAccuracy.bestForNavigation,
@@ -191,7 +196,15 @@ class LocationService {
 
     return Geolocator.getPositionStream(
       locationSettings: locationSettings,
-    ).map(_normalizePositionForBogota);
+    )
+        .where(
+          (Position pos) =>
+              isValidRealGpsCoordinate(pos.latitude, pos.longitude),
+        )
+        .map((Position pos) {
+      _lastValidPosition = pos;
+      return pos;
+    });
   }
 
   /// Consulta el porcentaje actual de batería del dispositivo de manera segura.

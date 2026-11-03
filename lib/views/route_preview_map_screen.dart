@@ -51,7 +51,10 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
   /// Resuelve una coordenada válida para el domiciliario dentro de los límites nacionales.
   LatLng _resolveCourierLocation(LatLng? rawLoc) {
     if (rawLoc != null &&
-        LocationService.isWithinColombia(rawLoc.latitude, rawLoc.longitude)) {
+        LocationService.isValidRealGpsCoordinate(
+          rawLoc.latitude,
+          rawLoc.longitude,
+        )) {
       return rawLoc;
     }
     return LocationService.defaultLocation;
@@ -63,8 +66,17 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
     _isLoadingRoute = true;
 
     try {
+      final authCubit = context.read<AuthCubit>();
       final ordersState = context.read<OrdersCubit>().state;
-      final trackState = context.read<TrackingCubit>().state;
+      final trackingCubit = context.read<TrackingCubit>();
+      if (trackingCubit.state.currentLocation == null) {
+        await trackingCubit.forceImmediateLocationSync(
+          courier: authCubit.currentCourier,
+          activeOrderId: ordersState.activeOrderId,
+        );
+      }
+      if (!mounted) return;
+      final trackState = trackingCubit.state;
       final courierLoc = _resolveCourierLocation(trackState.currentLocation);
 
       final waypoints = <LatLng>[
@@ -108,10 +120,19 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
         token: courier?.token,
       );
 
+      final activeCourier = authCubit.currentCourier?.copyWith(isOnline: true);
+      final targetOrderId = activeStop?.id ?? ordersCubit.state.activeOrderId;
+
       trackingCubit.syncWithShiftStatus(
-        courier: authCubit.currentCourier?.copyWith(isOnline: true),
-        activeOrderId: activeStop?.id ?? ordersCubit.state.activeOrderId,
-        isRouteInProgress: ordersCubit.state.isDeliveringInRoute,
+        courier: activeCourier,
+        activeOrderId: targetOrderId,
+        isRouteInProgress: true,
+        forceImmediate: true,
+      );
+
+      await trackingCubit.forceImmediateLocationSync(
+        courier: activeCourier,
+        activeOrderId: targetOrderId,
       );
 
       if (mounted) {
