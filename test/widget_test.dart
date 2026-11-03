@@ -513,6 +513,9 @@ void main() {
         expect(cubit.state.pendingCount, equals(0));
         expect(cubit.state.isRouteActive, isFalse);
         expect(cubit.state.isDeliveringInRoute, isFalse);
+        expect(cubit.state.hasAssignedRoute, isTrue);
+        expect(cubit.state.isRouteReceived, isTrue);
+        expect(cubit.state.orders.length, equals(2));
         await cubit.close();
       },
     );
@@ -787,7 +790,7 @@ void main() {
     );
 
     test(
-      'OrdersCubit y ApiService descartan paradas entregadas de una ruta anterior al asignar una nueva ruta',
+      'OrdersCubit mantiene la ruta abierta al completar entregas hasta recibir caja en PWA y descarta paradas anteriores en nueva ruta',
       () async {
         int callPhase = 1;
         final mockClient = MockClient((request) async {
@@ -829,10 +832,22 @@ void main() {
                 200,
               );
             }
+            if (callPhase == 2) {
+              return http.Response(
+                jsonEncode({
+                  'hasAssignedRoute': false,
+                  'isRouteReceived': false,
+                  'assignedRouteCode': '',
+                  'assignedRouteZone': '',
+                  'orders': [],
+                }),
+                200,
+              );
+            }
             return http.Response(
               jsonEncode({
                 'hasAssignedRoute': true,
-                'isRouteReceived': true,
+                'isRouteReceived': false,
                 'assignedRouteCode': 'RUT-NEW',
                 'assignedRouteZone': 'Zona Sur',
                 'orders': [
@@ -881,13 +896,20 @@ void main() {
 
         final cubit = OrdersCubit(apiService: ApiService(client: mockClient));
         await cubit.loadOrders(courierId: '7', token: 'jwt');
-        expect(cubit.state.hasAssignedRoute, isFalse);
-        expect(cubit.state.totalCount, equals(0));
-        expect(cubit.state.deliveredCount, equals(0));
+        expect(cubit.state.hasAssignedRoute, isTrue);
+        expect(cubit.state.isRouteReceived, isTrue);
+        expect(cubit.state.totalCount, equals(2));
+        expect(cubit.state.deliveredCount, equals(2));
         expect(cubit.state.pendingCount, equals(0));
 
-        cubit.setFilter(OrdersFilter.entregados);
         callPhase = 2;
+        await cubit.refreshOrdersLive(courierId: '7');
+        expect(cubit.state.hasAssignedRoute, isFalse);
+        expect(cubit.state.isRouteReceived, isFalse);
+        expect(cubit.state.totalCount, equals(0));
+
+        cubit.setFilter(OrdersFilter.entregados);
+        callPhase = 3;
         await cubit.refreshOrdersLive(courierId: '7');
 
         expect(cubit.state.hasAssignedRoute, isTrue);
@@ -1024,6 +1046,61 @@ void main() {
           LocationService.isValidRealGpsCoordinate(4.6612, -74.1145),
           isTrue,
         );
+        expect(
+          LocationService.isPlantaMatrizDefault(
+            ApiConfig.plantaMatrizLat,
+            ApiConfig.plantaMatrizLng,
+          ),
+          isTrue,
+        );
+        expect(
+          LocationService.hasSpecificOrderCoordinate(
+            ApiConfig.plantaMatrizLat,
+            ApiConfig.plantaMatrizLng,
+          ),
+          isFalse,
+        );
+        expect(
+          LocationService.hasSpecificOrderCoordinate(4.6782, -74.0981),
+          isTrue,
+        );
+        expect(
+          LocationService.normalizeColombianAddress(
+            'Avenida Calle 64C 69J, Bosque Popular, Bogotá',
+          ),
+          equals('Calle 64C # 69J, Bosque Popular, Bogotá'),
+        );
+      },
+    );
+
+    test(
+      'LocationService.geocodeColombiaAddress resuelve direcciones viales colombianas vía ArcGIS/Nominatim',
+      () async {
+        final mockGeoClient = MockClient((request) async {
+          if (request.url.host.contains('arcgis.com')) {
+            return http.Response(
+              jsonEncode({
+                'candidates': [
+                  {
+                    'address': 'Calle 64C 69J, Bosque Popular, Bogotá',
+                    'location': {'x': -74.0981, 'y': 4.6782},
+                  },
+                ],
+              }),
+              200,
+            );
+          }
+          return http.Response('[]', 200);
+        });
+
+        final resolved = await LocationService.geocodeColombiaAddress(
+          'Avenida Calle 64C 69J, Bosque Popular, Bogotá',
+          neighborhood: 'Bosque Popular',
+          client: mockGeoClient,
+        );
+        expect(resolved, isNotNull);
+        expect(resolved!.latitude, closeTo(4.6782, 0.001));
+        expect(resolved.longitude, closeTo(-74.0981, 0.001));
       },
     );
   });

@@ -31,6 +31,17 @@ class LocationService {
     return (lat - 4.69680).abs() < 0.00025 && (lng - (-74.09250)).abs() < 0.00025;
   }
 
+  /// Identifica si una coordenada corresponde al punto de referencia por defecto de Planta Matriz (4.7125, -74.1420).
+  static bool isPlantaMatrizDefault(double lat, double lng) {
+    return (lat - defaultLocation.latitude).abs() < 0.0001 &&
+        (lng - defaultLocation.longitude).abs() < 0.0001;
+  }
+
+  /// Verifica si un pedido cuenta con una coordenada específica propia en Colombia (distinta de cero y distinta del fallback de Planta Matriz).
+  static bool hasSpecificOrderCoordinate(double lat, double lng) {
+    return isWithinColombia(lat, lng) && !isPlantaMatrizDefault(lat, lng);
+  }
+
   /// Verifica si una coordenada proviene de una lectura GPS real y válida (no cero ni quemada).
   static bool isValidRealGpsCoordinate(double lat, double lng) {
     return lat.isFinite &&
@@ -61,28 +72,130 @@ class LocationService {
     }
   }
 
-  /// Geocodifica una dirección física en Bogotá/Colombia usando Nominatim con caché en memoria.
-  static Future<LatLng?> geocodeColombiaAddress(
-    String rawAddress, {
-    http.Client? client,
-  }) async {
+  /// Normaliza abreviaturas y cruces viales colombianos para mejorar la precisión del geocodificador.
+  static String normalizeColombianAddress(String rawAddress) {
+    String s = rawAddress.trim();
+    s = s.replaceAll(
+      RegExp(r'\b(?:av\.?|avenida)\s+(?:cl\.?|cll\.?|calle)\b', caseSensitive: false),
+      'Calle',
+    );
+    s = s.replaceAll(
+      RegExp(r'\b(?:av\.?|avenida)\s+(?:kr\.?|cra\.?|carrera)\b', caseSensitive: false),
+      'Carrera',
+    );
+    s = s.replaceAll(RegExp(r'\b(?:kr|cra|k)\.?\s*', caseSensitive: false), 'Carrera ');
+    s = s.replaceAll(RegExp(r'\b(?:cl|cll)\.?\s*', caseSensitive: false), 'Calle ');
+    s = s.replaceAll(RegExp(r'\b(?:dg|diag)\.?\s*', caseSensitive: false), 'Diagonal ');
+    s = s.replaceAll(RegExp(r'\b(?:tv|transv|tr)\.?\s*', caseSensitive: false), 'Transversal ');
+    s = s.replaceAllMapped(
+      RegExp(
+        r'\b(Calle|Carrera|Diagonal|Transversal|Avenida)\s+(\d+[A-Za-z]?(?:\s+Bis)?)\s+(?!#|No\.?|N°)(\d+[A-Za-z]?(?:\s*-\s*\d+)?)',
+        caseSensitive: false,
+      ),
+      (Match m) => '${m[1]} ${m[2]} # ${m[3]}',
+    );
+    return s.replaceAll(RegExp(r'\s+'), ' ').trim();
+  }
+
+  /// Extrae el barrio candidato desde una dirección separada por comas o desde el parámetro [neighborhood].
+  static String? _extractCandidateNeighborhood(
+    String rawAddress,
+    String? explicitNeighborhood,
+  ) {
+    final String cleanExplicit = (explicitNeighborhood ?? '').trim();
+    if (cleanExplicit.length >= 3 &&
+        !cleanExplicit.toLowerCase().contains('bogot') &&
+        !cleanExplicit.toLowerCase().contains('general')) {
+      return cleanExplicit;
+    }
+    final List<String> parts = rawAddress
+        .split(',')
+        .map((String p) => p.trim())
+        .where((String p) => p.isNotEmpty)
+        .toList();
+    if (parts.length >= 2) {
+      final String second = parts[1];
+      if (second.length >= 3 &&
+          !second.toLowerCase().contains('bogot') &&
+          !second.toLowerCase().contains('colombia') &&
+          !second.toLowerCase().contains('distrito') &&
+          !RegExp(r'^\d+$').hasMatch(second)) {
+        return second;
+      }
+    }
+    return null;
+  }
+
+  /// Consulta ArcGIS World Geocoder acotado a Colombia/Bogotá para resolver nomenclatura vial colombiana.
+  static Future<LatLng?> _queryArcGisColombia(
+    String queryText,
+    http.Client httpClient,
+  ) async {
     try {
-      final String trimmed = rawAddress.trim();
-      if (trimmed.length < 4) {
-        return null;
+      final Uri arcGisUri = Uri.https(
+        'geocode.arcgis.com',
+        '/arcgis/rest/services/World/GeocodeServer/findAddressCandidates',
+        <String, String>{
+          'f': 'json',
+          'SingleLine': queryText,
+          'countryCode': 'COL',
+          'searchExtent': '-74.35,4.45,-73.95,4.90',
+          'maxLocations': '1',
+          'outFields': 'Match_addr,Addr_type',
+        },
+      );
+      final http.Response response = await httpClient
+          .get(
+            arcGisUri,
+            headers: const <String, String>{
+              'Accept': 'application/json',
+              'User-Agent': 'DespulpadoraApp/1.0',
+            },
+          )
+          .timeout(const Duration(seconds: 5));
+      if (response.statusCode == 200) {
+        final dynamic decoded = jsonDecode(response.body);
+        if (decoded is Map && decoded['candidates'] is List) {
+          final List<dynamic> candidates = decoded['candidates'] as List<dynamic>;
+          if (candidates.isNotEmpty && candidates.first is Map) {
+            final Map<dynamic, dynamic> first =
+                candidates.first as Map<dynamic, dynamic>;
+            final dynamic loc = first['location'];
+            if (loc is Map) {
+              final double? lat = double.tryParse(loc['y']?.toString() ?? '');
+              final double? lon = double.tryParse(loc['x']?.toString() ?? '');
+              if (lat != null &&
+                  lon != null &&
+                  hasSpecificOrderCoordinate(lat, lon)) {
+                return LatLng(lat, lon);
+              }
+            }
+          }
+        }
+        if (decoded is List && decoded.isNotEmpty && decoded.first is Map) {
+          final Map<dynamic, dynamic> first =
+              decoded.first as Map<dynamic, dynamic>;
+          final double? lat = double.tryParse(first['lat']?.toString() ?? '');
+          final double? lon = double.tryParse(first['lon']?.toString() ?? '');
+          if (lat != null &&
+              lon != null &&
+              hasSpecificOrderCoordinate(lat, lon)) {
+            return LatLng(lat, lon);
+          }
+        }
       }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
 
-      final String cacheKey = trimmed.toLowerCase();
-      final LatLng? cached = _geocodedAddressCache[cacheKey];
-      if (cached != null) {
-        return cached;
-      }
-
-      final String query = trimmed.toLowerCase().contains('bogot') ||
-              trimmed.toLowerCase().contains('colombia')
-          ? trimmed
-          : '$trimmed, Bogotá, Colombia';
-
+  /// Consulta Nominatim OpenStreetMap acotado a Colombia.
+  static Future<LatLng?> _queryNominatimColombia(
+    String queryText,
+    http.Client httpClient,
+  ) async {
+    try {
       final Uri uri = Uri.https(
         'nominatim.openstreetmap.org',
         '/search',
@@ -90,11 +203,9 @@ class LocationService {
           'format': 'json',
           'limit': '1',
           'countrycodes': 'co',
-          'q': query,
+          'q': queryText,
         },
       );
-
-      final http.Client httpClient = client ?? http.Client();
       final http.Response response = await httpClient
           .get(
             uri,
@@ -112,14 +223,108 @@ class LocationService {
           if (first is Map) {
             final double? lat = double.tryParse(first['lat']?.toString() ?? '');
             final double? lon = double.tryParse(first['lon']?.toString() ?? '');
-            if (lat != null && lon != null && isWithinColombia(lat, lon)) {
-              final LatLng resolved = LatLng(lat, lon);
-              _geocodedAddressCache[cacheKey] = resolved;
-              return resolved;
+            if (lat != null &&
+                lon != null &&
+                hasSpecificOrderCoordinate(lat, lon)) {
+              return LatLng(lat, lon);
+            }
+          }
+        }
+        if (decoded is Map && decoded['candidates'] is List) {
+          final List<dynamic> candidates = decoded['candidates'] as List<dynamic>;
+          if (candidates.isNotEmpty && candidates.first is Map) {
+            final dynamic loc = (candidates.first as Map)['location'];
+            if (loc is Map) {
+              final double? lat = double.tryParse(loc['y']?.toString() ?? '');
+              final double? lon = double.tryParse(loc['x']?.toString() ?? '');
+              if (lat != null &&
+                  lon != null &&
+                  hasSpecificOrderCoordinate(lat, lon)) {
+                return LatLng(lat, lon);
+              }
             }
           }
         }
       }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Geocodifica una dirección física en Bogotá/Colombia usando ArcGIS + Nominatim con normalización vial y caché en memoria.
+  static Future<LatLng?> geocodeColombiaAddress(
+    String rawAddress, {
+    String? neighborhood,
+    http.Client? client,
+  }) async {
+    try {
+      final String trimmed = rawAddress.trim();
+      if (trimmed.length < 4) {
+        return null;
+      }
+
+      final String cleanNeighborhood = (neighborhood ?? '').trim();
+      final String cacheKey =
+          '${trimmed.toLowerCase()}|${cleanNeighborhood.toLowerCase()}';
+      final LatLng? cached = _geocodedAddressCache[cacheKey] ??
+          _geocodedAddressCache[trimmed.toLowerCase()];
+      if (cached != null) {
+        return cached;
+      }
+
+      final http.Client httpClient = client ?? http.Client();
+      final String? candidateNeighborhood =
+          _extractCandidateNeighborhood(trimmed, cleanNeighborhood);
+
+      String buildBogotaQuery(String baseText) {
+        final String lower = baseText.toLowerCase();
+        final String withNeighborhood = (candidateNeighborhood != null &&
+                !lower.contains(candidateNeighborhood.toLowerCase()))
+            ? '$baseText, $candidateNeighborhood'
+            : baseText;
+        if (withNeighborhood.toLowerCase().contains('bogot') ||
+            withNeighborhood.toLowerCase().contains('colombia')) {
+          return withNeighborhood;
+        }
+        return '$withNeighborhood, Bogotá, Colombia';
+      }
+
+      final String normalized = normalizeColombianAddress(trimmed);
+      final List<String> candidateQueries = <String>[
+        buildBogotaQuery(normalized),
+        if (normalized != trimmed) buildBogotaQuery(trimmed),
+      ];
+
+      for (final String q in candidateQueries) {
+        final LatLng? arcGisResult = await _queryArcGisColombia(q, httpClient);
+        if (arcGisResult != null) {
+          _geocodedAddressCache[cacheKey] = arcGisResult;
+          _geocodedAddressCache[trimmed.toLowerCase()] = arcGisResult;
+          return arcGisResult;
+        }
+        final LatLng? nominatimResult =
+            await _queryNominatimColombia(q, httpClient);
+        if (nominatimResult != null) {
+          _geocodedAddressCache[cacheKey] = nominatimResult;
+          _geocodedAddressCache[trimmed.toLowerCase()] = nominatimResult;
+          return nominatimResult;
+        }
+      }
+
+      if (candidateNeighborhood != null) {
+        final String neighborhoodQuery =
+            '$candidateNeighborhood, Bogotá, Colombia';
+        final LatLng? neighborhoodGeo =
+            await _queryNominatimColombia(neighborhoodQuery, httpClient) ??
+                await _queryArcGisColombia(neighborhoodQuery, httpClient);
+        if (neighborhoodGeo != null) {
+          _geocodedAddressCache[cacheKey] = neighborhoodGeo;
+          _geocodedAddressCache[trimmed.toLowerCase()] = neighborhoodGeo;
+          return neighborhoodGeo;
+        }
+      }
+
       return null;
     } catch (_) {
       return null;

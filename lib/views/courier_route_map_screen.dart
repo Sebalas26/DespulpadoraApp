@@ -59,6 +59,12 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
   /// Firma de caché del último estado de ruta calculado.
   String _lastRouteSignature = '';
 
+  /// Coordenadas geocodificadas localmente para paradas sin coordenada específica en backend.
+  final Map<String, LatLng> _localGeocodedStops = <String, LatLng>{};
+
+  /// Conjunto de identificadores de paradas con geocodificación en curso.
+  final Set<String> _geocodingInFlightIds = <String>{};
+
   @override
   void initState() {
     super.initState();
@@ -109,8 +115,34 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
     return LocationService.defaultLocation;
   }
 
-  /// Garantiza que la coordenada de una parada sea válida dentro del área operativa.
+  /// Garantiza que la coordenada de una parada sea específica del pedido o geocodifica su dirección física.
   LatLng _resolveStopLocation(OrderModel order, LatLng fallback) {
+    if (LocationService.hasSpecificOrderCoordinate(
+      order.latitud,
+      order.longitud,
+    )) {
+      return LatLng(order.latitud, order.longitud);
+    }
+    final LatLng? localGeo = _localGeocodedStops[order.id];
+    if (localGeo != null) {
+      return localGeo;
+    }
+    if (order.direccion.trim().length >= 4 &&
+        !_geocodingInFlightIds.contains(order.id)) {
+      _geocodingInFlightIds.add(order.id);
+      LocationService.geocodeColombiaAddress(
+        order.direccion,
+        neighborhood: order.barrio,
+      ).then((LatLng? resolved) {
+        _geocodingInFlightIds.remove(order.id);
+        if (resolved != null && mounted) {
+          setState(() {
+            _localGeocodedStops[order.id] = resolved;
+          });
+          _recalculateFullRoute(force: true);
+        }
+      });
+    }
     if (LocationService.isWithinColombia(order.latitud, order.longitud)) {
       return LatLng(order.latitud, order.longitud);
     }
@@ -137,7 +169,10 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       final String signature =
           '${courierLoc.latitude.toStringAsFixed(3)},${courierLoc.longitude.toStringAsFixed(3)}_'
           '${activeStop?.id ?? "none"}_'
-          '${ordersState.orders.map((OrderModel o) => "${o.id}:${o.estado.name}:${o.latitud.toStringAsFixed(4)},${o.longitud.toStringAsFixed(4)}").join("|")}';
+          '${ordersState.orders.map((OrderModel o) {
+            final LatLng stopLoc = _resolveStopLocation(o, courierLoc);
+            return "${o.id}:${o.estado.name}:${stopLoc.latitude.toStringAsFixed(4)},${stopLoc.longitude.toStringAsFixed(4)}";
+          }).join("|")}';
 
       if (!force &&
           signature == _lastRouteSignature &&
@@ -592,6 +627,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
       body: BlocConsumer<OrdersCubit, OrdersState>(
         listener: (context, ordersState) {
           _syncTrackingWithRouteState();
+          _recalculateFullRoute();
         },
         builder: (context, ordersState) {
           final activeOrder = ordersState.activeOrder;
@@ -600,7 +636,10 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               activeOrder.estado != OrderStatus.entregado &&
               activeOrder.estado != OrderStatus.novedad;
 
-          return BlocBuilder<TrackingCubit, TrackingState>(
+          return BlocConsumer<TrackingCubit, TrackingState>(
+            listener: (context, trackState) {
+              _recalculateFullRoute();
+            },
             builder: (context, trackState) {
               final courierLatLng = _resolveCourierLocation(
                 trackState.currentLocation,
@@ -609,6 +648,20 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
               final LatLng destLatLng = activeOrder != null
                   ? _resolveStopLocation(activeOrder, courierLatLng)
                   : courierLatLng;
+
+              final List<OrderModel> resolvedAllStops =
+                  ordersState.orders.map((OrderModel s) {
+                final LatLng resolvedLoc =
+                    _resolveStopLocation(s, courierLatLng);
+                if (resolvedLoc.latitude != s.latitud ||
+                    resolvedLoc.longitude != s.longitud) {
+                  return s.copyWith(
+                    latitud: resolvedLoc.latitude,
+                    longitud: resolvedLoc.longitude,
+                  );
+                }
+                return s;
+              }).toList();
 
               final activeStopIndex = activeOrder != null
                   ? ordersState.getStopSequenceNumber(activeOrder.id)
@@ -636,7 +689,7 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                 stopSequenceNumber: activeStopIndex,
                 routePoints: _activeLegPoints,
                 fullRoutePoints: _multiRouteData?.fullPoints,
-                allStops: ordersState.orders,
+                allStops: resolvedAllStops,
                 activeStopId: activeOrder?.id,
                 isFullScreen: _isMapFullScreen,
                 bottomControlsOffset:

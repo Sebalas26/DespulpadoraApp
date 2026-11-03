@@ -178,7 +178,10 @@ class _RoutePreviewMapScreenState extends State<RoutePreviewMapScreen> {
           },
         ),
       ),
-      body: BlocBuilder<OrdersCubit, OrdersState>(
+      body: BlocConsumer<OrdersCubit, OrdersState>(
+        listener: (context, ordersState) {
+          _loadPreviewStreetRoute();
+        },
         builder: (context, ordersState) {
           final turnOrder = ordersState.currentTurnOrder;
           final focusedId = _selectedPreviewStopId ??

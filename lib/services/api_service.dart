@@ -198,7 +198,48 @@ class ApiService {
     final List<Map<String, dynamic>> activeMaps =
         allMaps.where((m) => !isTerminal(m)).toList();
     if (activeMaps.isEmpty) {
-      return const <Map<String, dynamic>>[];
+      final List<Map<String, dynamic>> unsettledRouteMaps =
+          allMaps.where((Map<String, dynamic> m) {
+        final String status =
+            (m['status'] ?? m['estado'] ?? '').toString().trim().toLowerCase();
+        if (status == 'cancelado' || status == 'cancelled') {
+          return false;
+        }
+        final int? seq =
+            int.tryParse((m['routeSequenceOrder'] ?? '').toString());
+        final String dispRaw = (m['dispatchedAtUtc'] ?? '').toString().trim();
+        return seq != null && seq > 0 && dispRaw.isNotEmpty;
+      }).toList();
+
+      if (unsettledRouteMaps.isEmpty) {
+        return const <Map<String, dynamic>>[];
+      }
+
+      DateTime? latestUnsettledDispatchUtc;
+      for (final Map<String, dynamic> m in unsettledRouteMaps) {
+        final DateTime? disp = DateTime.tryParse(
+          (m['dispatchedAtUtc'] ?? '').toString(),
+        )?.toUtc();
+        if (disp != null &&
+            (latestUnsettledDispatchUtc == null ||
+                disp.isAfter(latestUnsettledDispatchUtc))) {
+          latestUnsettledDispatchUtc = disp;
+        }
+      }
+
+      return unsettledRouteMaps.where((Map<String, dynamic> m) {
+        if (latestUnsettledDispatchUtc == null) {
+          return true;
+        }
+        final DateTime? disp = DateTime.tryParse(
+          (m['dispatchedAtUtc'] ?? '').toString(),
+        )?.toUtc();
+        if (disp != null &&
+            latestUnsettledDispatchUtc.difference(disp).inSeconds > 15) {
+          return false;
+        }
+        return true;
+      }).toList();
     }
     if (allMaps.length <= 1) {
       return allMaps;

@@ -417,12 +417,18 @@ class _OsmMapWidgetState extends State<OsmMapWidget>
       if (widget.isNavigationMode &&
           _isMapReady &&
           (widget.courierLocation != oldWidget.courierLocation ||
+              widget.destinationLocation != oldWidget.destinationLocation ||
               widget.routePoints != oldWidget.routePoints)) {
         final double movedMeters = _distanceMetersBetween(
           oldWidget.courierLocation,
           widget.courierLocation,
         );
+        final double destMovedMeters = _distanceMetersBetween(
+          oldWidget.destinationLocation,
+          widget.destinationLocation,
+        );
         if (movedMeters >= 4.0 ||
+            destMovedMeters >= 5.0 ||
             widget.routePoints != oldWidget.routePoints) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (mounted) {

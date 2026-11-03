@@ -409,7 +409,12 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                   else if (ordersState.filteredOrders.isEmpty)
                     SliverFillRemaining(
                       hasScrollBody: false,
-                      child: _buildEmptyState(ordersState.filter),
+                      child: _buildEmptyState(
+                        ordersState.filter,
+                        isRouteCompletedPendingSettlement:
+                            ordersState.orders.isNotEmpty &&
+                                ordersState.pendingCount == 0,
+                      ),
                     )
                   else
                     SliverList(
@@ -445,6 +450,31 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
 
           if (_isLoadingTransition) {
             return const _FacebookShimmerFab();
+          }
+
+          if (ordersState.pendingCount == 0) {
+            return FloatingActionButton.extended(
+              heroTag: 'fab_ver_ruta_home',
+              onPressed: () {
+                if (ordersState.filter != OrdersFilter.todos) {
+                  context.read<OrdersCubit>().setFilter(OrdersFilter.todos);
+                }
+              },
+              backgroundColor: const Color(0xFF047857),
+              foregroundColor: Colors.white,
+              elevation: 4,
+              icon: const Icon(
+                Icons.point_of_sale_rounded,
+                size: 20,
+              ),
+              label: const Text(
+                'Pendiente Entregar Caja en Planta',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                ),
+              ),
+            );
           }
 
           return FloatingActionButton.extended(
@@ -637,6 +667,42 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
                 ),
               ],
             ),
+            if (state.pendingCount == 0 && state.orders.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFECFDF5),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFF6EE7B7)),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(
+                      Icons.task_alt_rounded,
+                      color: Color(0xFF047857),
+                      size: 20,
+                    ),
+                    SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Ruta completada al 100%. Dirígete a planta para entregar la caja y cerrar la ruta.',
+                        style: TextStyle(
+                          color: Color(0xFF065F46),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ],
       ),
@@ -1045,7 +1111,12 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
   }
 
   /// Construye el mensaje de estado vacío cuando el filtro seleccionado no arroja pedidos.
-  Widget _buildEmptyState(OrdersFilter filter) {
+  Widget _buildEmptyState(
+    OrdersFilter filter, {
+    bool isRouteCompletedPendingSettlement = false,
+  }) {
+    final bool showCompletedBanner =
+        isRouteCompletedPendingSettlement && filter == OrdersFilter.pendientes;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -1054,30 +1125,44 @@ class _HomeOrdersScreenState extends State<HomeOrdersScreen> {
           children: [
             Container(
               padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: AppColors.surfaceElevated,
+              decoration: BoxDecoration(
+                color: showCompletedBanner
+                    ? const Color(0xFFD1FAE5)
+                    : AppColors.surfaceElevated,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(
-                Icons.inventory_2_outlined,
+              child: Icon(
+                showCompletedBanner
+                    ? Icons.check_circle_outline_rounded
+                    : Icons.inventory_2_outlined,
                 size: 40,
-                color: AppColors.textMuted,
+                color: showCompletedBanner
+                    ? const Color(0xFF047857)
+                    : AppColors.textMuted,
               ),
             ),
             const SizedBox(height: 16),
-            const Text(
-              'No hay pedidos en esta categoría',
-              style: TextStyle(
+            Text(
+              showCompletedBanner
+                  ? '¡Todas las entregas fueron completadas!'
+                  : 'No hay pedidos en esta categoría',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 16,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'Desliza hacia abajo para actualizar la lista desde la central.',
+            Text(
+              showCompletedBanner
+                  ? 'Tu ruta se cerrará automáticamente cuando entregues la caja y finalicen la recepción en la PWA.'
+                  : 'Desliza hacia abajo para actualizar la lista desde la central.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary, fontSize: 13),
+              style: const TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 13,
+              ),
             ),
           ],
         ),

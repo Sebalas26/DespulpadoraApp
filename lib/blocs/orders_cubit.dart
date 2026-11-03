@@ -327,9 +327,6 @@ class OrdersCubit extends Cubit<OrdersState> {
     try {
       final bool wasPreviousRouteCompleted =
           state.orders.isNotEmpty && state.pendingCount == 0;
-      if (wasPreviousRouteCompleted) {
-        _archiveCompletedRouteOrders(state.orders);
-      }
 
       final AssignedRouteResponse routeResponse =
           await _apiService.fetchAssignedRoute(
@@ -337,11 +334,51 @@ class OrdersCubit extends Cubit<OrdersState> {
         token: _lastToken,
       );
       final List<OrderModel> incomingRawOrders = routeResponse.orders;
+
+      if (incomingRawOrders.isEmpty || !routeResponse.hasAssignedRoute) {
+        if (state.orders.isNotEmpty) {
+          _archiveCompletedRouteOrders(state.orders);
+        }
+        emit(const OrdersState(
+          status: OrdersLoadingStatus.success,
+          orders: <OrderModel>[],
+          filter: OrdersFilter.todos,
+          activeOrderId: null,
+          isRouteActive: false,
+          hasAssignedRoute: false,
+          isRouteReceived: false,
+          receptionPhotoTime: null,
+          assignedRouteCode: '',
+          assignedRouteZone: '',
+        ));
+        return;
+      }
+
       final bool incomingHasPending = incomingRawOrders.any(
         (OrderModel o) =>
             o.estado != OrderStatus.entregado &&
             o.estado != OrderStatus.novedad,
       );
+      if (wasPreviousRouteCompleted && incomingHasPending) {
+        final Set<String> incomingPendingIds = incomingRawOrders
+            .where(
+              (OrderModel o) =>
+                  o.estado != OrderStatus.entregado &&
+                  o.estado != OrderStatus.novedad,
+            )
+            .expand((OrderModel o) => <String>[o.id.trim(), o.apiOrderId.trim()])
+            .where((String id) => id.isNotEmpty)
+            .toSet();
+        final bool isNewRouteBatch = state.orders.every(
+          (OrderModel prev) =>
+              !incomingPendingIds.contains(prev.id.trim()) &&
+              !incomingPendingIds.contains(prev.apiOrderId.trim()),
+        );
+        if (isNewRouteBatch) {
+          _archiveCompletedRouteOrders(state.orders);
+        }
+      }
+
       final List<OrderModel> rawOrders =
           (incomingHasPending && _archivedCompletedOrderIds.isNotEmpty)
               ? incomingRawOrders.where((OrderModel o) {
@@ -358,17 +395,24 @@ class OrdersCubit extends Cubit<OrdersState> {
                 }).toList()
               : incomingRawOrders;
 
-      if (rawOrders.isNotEmpty &&
-          rawOrders.every(
-            (OrderModel o) =>
-                o.estado == OrderStatus.entregado ||
-                o.estado == OrderStatus.novedad,
-          )) {
-        _archiveCompletedRouteOrders(rawOrders);
+      if (rawOrders.isEmpty) {
+        emit(const OrdersState(
+          status: OrdersLoadingStatus.success,
+          orders: <OrderModel>[],
+          filter: OrdersFilter.todos,
+          activeOrderId: null,
+          isRouteActive: false,
+          hasAssignedRoute: false,
+          isRouteReceived: false,
+          receptionPhotoTime: null,
+          assignedRouteCode: '',
+          assignedRouteZone: '',
+        ));
+        return;
       }
 
       final List<OrderModel> orders = rawOrders.map((OrderModel o) {
-        if (LocationService.isWithinColombia(o.latitud, o.longitud)) {
+        if (LocationService.hasSpecificOrderCoordinate(o.latitud, o.longitud)) {
           _resolvedOrderCoords[o.id] = LatLng(o.latitud, o.longitud);
           return o;
         }
@@ -404,23 +448,8 @@ class OrdersCubit extends Cubit<OrdersState> {
             o.estado != OrderStatus.entregado &&
             o.estado != OrderStatus.novedad,
       );
-      if (!hasPendingOrders) {
-        emit(OrdersState(
-          status: OrdersLoadingStatus.success,
-          orders: const <OrderModel>[],
-          filter: OrdersFilter.todos,
-          activeOrderId: null,
-          isRouteActive: false,
-          hasAssignedRoute: false,
-          isRouteReceived: false,
-          receptionPhotoTime: null,
-          assignedRouteCode: '',
-          assignedRouteZone: '',
-        ));
-        return;
-      }
 
-      final bool hasRoute = routeResponse.hasAssignedRoute || orders.isNotEmpty;
+      final bool hasRoute = routeResponse.hasAssignedRoute && orders.isNotEmpty;
       final bool isFreshlyResetRoute =
           wasPreviousRouteCompleted && hasPendingOrders && !anyProgress;
       final bool isReceived = hasRoute &&
@@ -440,7 +469,7 @@ class OrdersCubit extends Cubit<OrdersState> {
         status: OrdersLoadingStatus.success,
         orders: orders,
         filter: nextFilter,
-        activeOrderId: turnId ?? (orders.isNotEmpty ? orders.first.id : null),
+        activeOrderId: turnId ?? (orders.isNotEmpty ? orders.last.id : null),
         isRouteActive:
             (hasRoute && hasPendingOrders) ? routeAlreadyActive : false,
         hasAssignedRoute: hasRoute,
@@ -469,7 +498,7 @@ class OrdersCubit extends Cubit<OrdersState> {
     try {
       bool anyUpdated = false;
       for (final OrderModel raw in rawOrders) {
-        if (LocationService.isWithinColombia(raw.latitud, raw.longitud)) {
+        if (LocationService.hasSpecificOrderCoordinate(raw.latitud, raw.longitud)) {
           continue;
         }
         if (_resolvedOrderCoords.containsKey(raw.id)) {
@@ -479,8 +508,10 @@ class OrdersCubit extends Cubit<OrdersState> {
           continue;
         }
 
-        final LatLng? geocoded =
-            await LocationService.geocodeColombiaAddress(raw.direccion);
+        final LatLng? geocoded = await LocationService.geocodeColombiaAddress(
+          raw.direccion,
+          neighborhood: raw.barrio,
+        );
         if (geocoded != null && !isClosed) {
           _resolvedOrderCoords[raw.id] = geocoded;
           anyUpdated = true;
@@ -666,27 +697,14 @@ class OrdersCubit extends Cubit<OrdersState> {
             o.estado != OrderStatus.entregado &&
             o.estado != OrderStatus.novedad,
       );
-      if (!hasRemainingPending) {
-        _archiveCompletedRouteOrders(updatedOrders);
-        emit(OrdersState(
-          status: OrdersLoadingStatus.success,
-          orders: const <OrderModel>[],
-          filter: OrdersFilter.todos,
-          activeOrderId: null,
-          isRouteActive: false,
-          hasAssignedRoute: false,
-          isRouteReceived: false,
-          receptionPhotoTime: null,
-          assignedRouteCode: '',
-          assignedRouteZone: '',
-        ));
-        return true;
-      }
 
       emit(state.copyWith(
+        status: OrdersLoadingStatus.success,
         orders: updatedOrders,
         activeOrderId: nextActiveId,
-        isRouteActive: state.isRouteActive,
+        isRouteActive: hasRemainingPending ? state.isRouteActive : false,
+        hasAssignedRoute: true,
+        isRouteReceived: true,
       ));
       return true;
     } catch (_) {
@@ -762,27 +780,6 @@ class OrdersCubit extends Cubit<OrdersState> {
         );
         if (!hasRemainingPending) {
           routeActive = false;
-          _archiveCompletedRouteOrders(updatedOrders);
-          emit(OrdersState(
-            status: OrdersLoadingStatus.success,
-            orders: const <OrderModel>[],
-            filter: OrdersFilter.todos,
-            activeOrderId: null,
-            isRouteActive: false,
-            hasAssignedRoute: false,
-            isRouteReceived: false,
-            receptionPhotoTime: null,
-            assignedRouteCode: '',
-            assignedRouteZone: '',
-          ));
-          if (targetOrder != null) {
-            _dispatchAutomaticWhatsAppForStatus(
-              targetOrder,
-              newStatus,
-              paymentMethod: paymentMethod ?? targetOrder.metodoPago,
-            );
-          }
-          return true;
         } else if (activeId != null && routeActive) {
           updatedOrders = updatedOrders.map((o) {
             if (o.id == activeId && o.estado == OrderStatus.asignado) {
@@ -794,9 +791,12 @@ class OrdersCubit extends Cubit<OrdersState> {
       }
 
       emit(state.copyWith(
+        status: OrdersLoadingStatus.success,
         orders: updatedOrders,
         activeOrderId: activeId,
         isRouteActive: routeActive,
+        hasAssignedRoute: true,
+        isRouteReceived: true,
       ));
 
       if (targetOrder != null) {
