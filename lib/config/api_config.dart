@@ -137,7 +137,7 @@ class ApiConfig {
   static const String couriersEndpoint = '/couriers';
 
   /// Intervalo en segundos para la transmisión de telemetría GPS.
-  static const int telemetryIntervalSeconds = 5;
+  static const int telemetryIntervalSeconds = 1;
 
   /// Clave de persistencia local para la URL base REST.
   static const String keyBaseUrl = 'config_base_url';

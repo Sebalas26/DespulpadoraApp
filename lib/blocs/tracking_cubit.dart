@@ -97,6 +97,12 @@ class TrackingCubit extends Cubit<TrackingState> {
   /// Identificador de la orden activa en curso.
   String? _activeOrderId;
 
+  /// Nivel de batería en caché para no bloquear el envío en tiempo real de coordenadas GPS.
+  int _cachedBatteryLevel = 100;
+
+  /// Indica si hay una petición REST de ubicación en curso para evitar encolamiento.
+  bool _isRestUpdateInFlight = false;
+
   /// Crea una instancia de [TrackingCubit] permitiendo inyectar sus servicios dependientes.
   TrackingCubit({
     LocationService? locationService,
@@ -136,17 +142,27 @@ class TrackingCubit extends Cubit<TrackingState> {
     _activeOrderId = orderId;
   }
 
-  /// Inicia la captura de coordenadas GPS y establece la conexión WebSocket.
+  /// Inicia la captura continua de coordenadas GPS en tiempo real y establece la conexión WebSocket.
   Future<void> startTracking() async {
     if (state.isTrackingActive) return;
 
     emit(state.copyWith(isTrackingActive: true));
     try {
       _wsService.connect();
+      _refreshBatteryCache();
 
-      final initialPos = await _locationService.getCurrentPosition();
+      _positionSubscription?.cancel();
+      _positionSubscription = _locationService
+          .getPositionStream(intervalSeconds: 0)
+          .listen((Position pos) {
+        if (state.isTrackingActive) {
+          _sendTelemetryPacket(pos);
+        }
+      }, onError: (_) {});
+
+      final Position? initialPos = await _locationService.getCurrentPosition();
       if (initialPos != null) {
-        final safeLoc = LocationService.isWithinColombia(
+        final LatLng safeLoc = LocationService.isWithinColombia(
           initialPos.latitude,
           initialPos.longitude,
         )
@@ -168,32 +184,41 @@ class TrackingCubit extends Cubit<TrackingState> {
     } catch (_) {}
   }
 
+  /// Actualiza en segundo plano el nivel de batería en caché sin retrasar la transmisión GPS.
+  Future<void> _refreshBatteryCache() async {
+    try {
+      final int level = await _locationService.getBatteryLevel();
+      _cachedBatteryLevel = level;
+    } catch (_) {}
+  }
+
   /// Ejecuta un ciclo periódico de lectura y transmisión GPS.
   Future<void> _tickTelemetry() async {
     if (!state.isTrackingActive) return;
     try {
-      final position = await _locationService.getCurrentPosition();
+      _refreshBatteryCache();
+      final Position? position = await _locationService.getCurrentPosition();
       if (position != null) {
         await _sendTelemetryPacket(position);
       }
     } catch (_) {}
   }
 
-  /// Construye y transmite el paquete de ubicación por WebSocket y mediante `PUT /couriers/{id}/location`.
+  /// Construye y transmite al instante el paquete de ubicación por WebSocket y mediante `PUT /couriers/{id}/location`.
   Future<void> _sendTelemetryPacket(Position position) async {
     try {
-      final battery = await _locationService.getBatteryLevel();
-      final currentLatLng = LocationService.isWithinColombia(
+      final int battery = _cachedBatteryLevel;
+      final LatLng currentLatLng = LocationService.isWithinColombia(
         position.latitude,
         position.longitude,
       )
           ? LatLng(position.latitude, position.longitude)
           : LocationService.defaultLocation;
 
-      final courierIdStr = _currentCourier?.id ?? '';
-      final courierNameStr = _currentCourier?.nombre ?? '';
+      final String courierIdStr = _currentCourier?.id ?? '';
+      final String courierNameStr = _currentCourier?.nombre ?? '';
 
-      final payload = CourierLocationPayload(
+      final CourierLocationPayload payload = CourierLocationPayload(
         courierId: courierIdStr,
         courierName: courierNameStr,
         latitude: currentLatLng.latitude,
@@ -207,16 +232,6 @@ class TrackingCubit extends Cubit<TrackingState> {
 
       _wsService.sendLocationUpdate(payload);
 
-      final parsedCourierId = int.tryParse(courierIdStr) ?? 0;
-      if (parsedCourierId > 0) {
-        await _apiService.updateLocation(
-          courierId: parsedCourierId,
-          latitude: currentLatLng.latitude,
-          longitude: currentLatLng.longitude,
-          token: _currentCourier?.token,
-        );
-      }
-
       emit(state.copyWith(
         currentLocation: currentLatLng,
         speed: payload.speed,
@@ -225,7 +240,24 @@ class TrackingCubit extends Cubit<TrackingState> {
         lastTransmission: DateTime.now(),
         totalPacketsSent: state.totalPacketsSent + 1,
       ));
-    } catch (_) {}
+
+      final int parsedCourierId = int.tryParse(courierIdStr) ?? 0;
+      if (parsedCourierId > 0 && !_isRestUpdateInFlight) {
+        _isRestUpdateInFlight = true;
+        try {
+          await _apiService.updateLocation(
+            courierId: parsedCourierId,
+            latitude: currentLatLng.latitude,
+            longitude: currentLatLng.longitude,
+            token: _currentCourier?.token,
+          );
+        } finally {
+          _isRestUpdateInFlight = false;
+        }
+      }
+    } catch (_) {
+      _isRestUpdateInFlight = false;
+    }
   }
 
   /// Detiene el temporizador de telemetría y cierra la conexión WebSocket.

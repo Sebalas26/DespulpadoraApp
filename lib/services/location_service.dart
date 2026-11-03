@@ -172,8 +172,8 @@ class LocationService {
 
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 5),
+          accuracy: LocationAccuracy.bestForNavigation,
+          timeLimit: Duration(seconds: 4),
         ),
       );
       return _normalizePositionForBogota(pos);
@@ -182,11 +182,11 @@ class LocationService {
     }
   }
 
-  /// Retorna un flujo continuo de actualizaciones de posición GPS.
-  Stream<Position> getPositionStream({int intervalSeconds = 5}) {
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 5,
+  /// Retorna un flujo continuo de actualizaciones de posición GPS sin filtro de distancia ni segundos de demora.
+  Stream<Position> getPositionStream({int intervalSeconds = 0}) {
+    const LocationSettings locationSettings = LocationSettings(
+      accuracy: LocationAccuracy.bestForNavigation,
+      distanceFilter: 0,
     );
 
     return Geolocator.getPositionStream(

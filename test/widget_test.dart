@@ -1007,6 +1007,7 @@ void main() {
           find.byType(FlutterMap),
         );
         expect(flutterMap.options.initialZoom, closeTo(17.65, 0.01));
+        expect(ApiConfig.telemetryIntervalSeconds, equals(1));
       },
     );
   });
