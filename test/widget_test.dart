@@ -16,6 +16,9 @@ import 'package:despulpadora_app/services/api_service.dart';
 import 'package:despulpadora_app/services/location_service.dart';
 import 'package:despulpadora_app/views/login_screen.dart';
 import 'package:despulpadora_app/views/widgets/order_card_widget.dart';
+import 'package:despulpadora_app/views/widgets/osm_map_widget.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
 
 /// Suite integral de pruebas unitarias para modelos, servicios REST (`/api/mobile`) y Cubits.
 void main() {
@@ -943,6 +946,67 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(find.byIcon(Icons.phone_rounded), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'OsmMapWidget en Enrutado en Vivo elimina el ícono de moto y etiqueta MOTO, acerca el mapa y orienta el camino hacia arriba',
+      (WidgetTester tester) async {
+        final OrderModel activeStop = OrderModel.fromJson({
+          'id': 601,
+          'orderCode': 'ORD-0601',
+          'clientName': 'Cliente Destino Norte',
+          'clientPhone': '3109876543',
+          'clientAddress': 'Carrera 70 # 65-10',
+          'latitude': 4.6820,
+          'longitude': -74.0880,
+          'total': 42000,
+          'status': 'EnRuta',
+          'items': [],
+        });
+
+        final List<LatLng> sampleRoute = const <LatLng>[
+          LatLng(4.6750, -74.0920),
+          LatLng(4.6765, -74.0910),
+          LatLng(4.6780, -74.0900),
+          LatLng(4.6795, -74.0890),
+          LatLng(4.6810, -74.0885),
+          LatLng(4.6820, -74.0880),
+        ];
+
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 400,
+                height: 700,
+                child: OsmMapWidget(
+                  courierLocation: const LatLng(4.6750, -74.0920),
+                  destinationLocation: const LatLng(4.6820, -74.0880),
+                  destinationTitle: 'Cliente Destino Norte',
+                  courierPlate: 'Sin placa',
+                  isNavigationMode: true,
+                  routePoints: sampleRoute,
+                  allStops: <OrderModel>[activeStop],
+                  activeStopId: activeStop.id,
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump(const Duration(milliseconds: 250));
+        await tester.pump(const Duration(milliseconds: 1400));
+
+        expect(find.byIcon(Icons.two_wheeler_rounded), findsNothing);
+        expect(find.text('MOTO'), findsNothing);
+        expect(find.byIcon(Icons.navigation_rounded), findsOneWidget);
+        expect(find.byIcon(Icons.keyboard_arrow_up_rounded), findsWidgets);
+
+        final FlutterMap flutterMap = tester.widget<FlutterMap>(
+          find.byType(FlutterMap),
+        );
+        expect(flutterMap.options.initialZoom, closeTo(17.65, 0.01));
       },
     );
   });

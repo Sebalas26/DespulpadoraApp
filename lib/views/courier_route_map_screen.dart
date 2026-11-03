@@ -702,19 +702,28 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
                 children: [
                   _buildPwaTelemetryHeader(ordersState),
                   Expanded(
-                    flex: _showAllStopsList ? 5 : 6,
+                    flex: _showAllStopsList ? 5 : 1,
                     child: mapView,
                   ),
-                  Expanded(
-                    flex: _showAllStopsList ? 6 : 4,
-                    child: _buildBottomRoutePanel(
+                  if (_showAllStopsList)
+                    Expanded(
+                      flex: 6,
+                      child: _buildBottomRoutePanel(
+                        ordersState: ordersState,
+                        activeOrder: activeOrder,
+                        activeStopIndex: activeStopIndex,
+                        legDistanceLabel: legDistanceLabel,
+                        legEtaLabel: legEtaLabel,
+                      ),
+                    )
+                  else
+                    _buildBottomRoutePanel(
                       ordersState: ordersState,
                       activeOrder: activeOrder,
                       activeStopIndex: activeStopIndex,
                       legDistanceLabel: legDistanceLabel,
                       legEtaLabel: legEtaLabel,
                     ),
-                  ),
                 ],
               );
             },
@@ -853,25 +862,25 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
           ),
         ],
       ),
-      child: Column(
-        children: [
-          Expanded(
-            child: _showAllStopsList
-                ? _buildFullSequenceListView(ordersState, activeOrder)
-                : activeOrder != null
-                    ? _buildActiveStopFocusedCard(
-                        ordersState: ordersState,
-                        order: activeOrder,
-                        stopIndex: activeStopIndex,
-                        totalStops: ordersState.totalCount,
-                        legDistanceLabel: legDistanceLabel,
-                        legEtaLabel: legEtaLabel,
-                      )
-                    : const Center(
-                        child: Text('No hay paradas asignadas en la ruta.'),
-                      ),
-          ),
-        ],
+      child: SafeArea(
+        top: false,
+        child: _showAllStopsList
+            ? _buildFullSequenceListView(ordersState, activeOrder)
+            : activeOrder != null
+                ? _buildActiveStopFocusedCard(
+                    ordersState: ordersState,
+                    order: activeOrder,
+                    stopIndex: activeStopIndex,
+                    totalStops: ordersState.totalCount,
+                    legDistanceLabel: legDistanceLabel,
+                    legEtaLabel: legEtaLabel,
+                  )
+                : const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+                    child: Center(
+                      child: Text('No hay paradas asignadas en la ruta.'),
+                    ),
+                  ),
       ),
     );
   }
@@ -891,9 +900,10 @@ class _CourierRouteMapScreenState extends State<CourierRouteMapScreen> {
         ? ordersState.getStopSequenceNumber(turnOrder.id)
         : 1;
 
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
